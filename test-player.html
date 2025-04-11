@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>RTMP to FLV Test Player</title>
+  <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+</head>
+<body>
+  <h2>RTMP to FLV Test Player</h2>
+  <video id="player" controls style="width: 640px; height: 360px;"></video>
+  
+  <script>
+    if (flvjs.isSupported()) {
+      var videoElement = document.getElementById('player');
+      var flvPlayer = flvjs.createPlayer({
+        type: 'flv',
+        url: 'http://172.24.20.92:8000/live/test.flv',
+        isLive: true
+      });
+      flvPlayer.attachMediaElement(videoElement);
+      flvPlayer.load();
+      flvPlayer.play();
+    } else {
+      console.error('Your browser does not support flv.js');
+      document.write('Your browser does not support flv.js');
+    }
+  </script>
+</body>
+</html>

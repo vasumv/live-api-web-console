@@ -31,10 +31,9 @@ const host = "generativelanguage.googleapis.com";
 const uri = `wss://${host}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent`;
 
 function App() {
-  // this video reference is used for displaying the active stream, whether that is the webcam or screen capture
-  // feel free to style as you see fit
+  // this video reference is used for displaying the active stream, whether that is the WHEP stream or screen capture
   const videoRef = useRef<HTMLVideoElement>(null);
-  // either the screen capture, the video or null, if null we hide it
+  // either the screen capture, the WHEP stream or null, if null we hide it
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
 
   return (

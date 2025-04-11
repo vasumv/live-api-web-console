@@ -20,7 +20,7 @@ import { memo, ReactNode, RefObject, useEffect, useRef, useState } from "react";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import { UseMediaStreamResult } from "../../hooks/use-media-stream-mux";
 import { useScreenCapture } from "../../hooks/use-screen-capture";
-import { useWebcam } from "../../hooks/use-webcam";
+import { useWhepStream } from "../../hooks/use-whep-stream";
 import { AudioRecorder } from "../../lib/audio-recorder";
 import AudioPulse from "../audio-pulse/AudioPulse";
 import "./control-tray.scss";
@@ -41,7 +41,7 @@ type MediaStreamButtonProps = {
 };
 
 /**
- * button used for triggering webcam or screen-capture
+ * button used for triggering media streams
  */
 const MediaStreamButton = memo(
   ({ isStreaming, onIcon, offIcon, start, stop }: MediaStreamButtonProps) =>
@@ -62,10 +62,10 @@ function ControlTray({
   onVideoStreamChange = () => {},
   supportsVideo,
 }: ControlTrayProps) {
-  const videoStreams = [useWebcam(), useScreenCapture()];
+  const videoStreams = [useWhepStream(), useScreenCapture()];
   const [activeVideoStream, setActiveVideoStream] =
     useState<MediaStream | null>(null);
-  const [webcam, screenCapture] = videoStreams;
+  const [whepStream, screenCapture] = videoStreams;
   const [inVolume, setInVolume] = useState(0);
   const [audioRecorder] = useState(() => new AudioRecorder());
   const [muted, setMuted] = useState(false);
@@ -96,15 +96,32 @@ function ControlTray({
         },
       ]);
     };
-    if (connected && !muted && audioRecorder) {
-      audioRecorder.on("data", onData).on("volume", setInVolume).start();
-    } else {
-      audioRecorder.stop();
-    }
+    
+    const startAudioRecording = async () => {
+      if (connected && !muted && audioRecorder) {
+        try {
+          // If there's an active video stream with audio tracks, use that
+          if (activeVideoStream && activeVideoStream.getAudioTracks().length > 0) {
+            await audioRecorder.start(activeVideoStream);
+          } else {
+            // Otherwise try to get microphone or use fallback
+            await audioRecorder.start();
+          }
+          audioRecorder.on("data", onData).on("volume", setInVolume);
+        } catch (err) {
+          console.error("Failed to start audio recording:", err);
+        }
+      } else {
+        audioRecorder.stop();
+      }
+    };
+    
+    startAudioRecording();
+    
     return () => {
       audioRecorder.off("data", onData).off("volume", setInVolume);
     };
-  }, [connected, client, muted, audioRecorder]);
+  }, [connected, client, muted, audioRecorder, activeVideoStream]);
 
   useEffect(() => {
     if (videoRef.current) {
@@ -185,8 +202,8 @@ function ControlTray({
               offIcon="present_to_all"
             />
             <MediaStreamButton
-              isStreaming={webcam.isStreaming}
-              start={changeStreams(webcam)}
+              isStreaming={whepStream.isStreaming}
+              start={changeStreams(whepStream)}
               stop={changeStreams()}
               onIcon="videocam_off"
               offIcon="videocam"
@@ -201,7 +218,23 @@ function ControlTray({
           <button
             ref={connectButtonRef}
             className={cn("action-button connect-toggle", { connected })}
-            onClick={connected ? disconnect : connect}
+            onClick={async () => {
+              if (connected) {
+                // If connected, disconnect
+                disconnect();
+              } else {
+                // If not connected, connect to API and start WHEP stream
+                try {
+                  await connect();
+                  // Auto-start the WHEP stream if not already streaming
+                  if (!whepStream.isStreaming && !activeVideoStream) {
+                    changeStreams(whepStream)();
+                  }
+                } catch (err) {
+                  console.error("Failed to connect:", err);
+                }
+              }
+            }}
           >
             <span className="material-symbols-outlined filled">
               {connected ? "pause" : "play_arrow"}

@@ -15,7 +15,7 @@
  */
 
 export type UseMediaStreamResult = {
-  type: "webcam" | "screen";
+  type: "screen" | "whep";
   start: () => Promise<MediaStream>;
   stop: () => void;
   isStreaming: boolean;
