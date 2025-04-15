@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from "react";
 import { UseMediaStreamResult } from "./use-media-stream-mux";
 
-export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep"): UseMediaStreamResult {
+export function useWhepStream(whepUrl = "http://172.24.20.92:8889/webrtc_compatible/whep"): UseMediaStreamResult {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
@@ -26,7 +26,7 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
         
         // Even if we get a 404, the server is reachable
         setIsUrlValid(true);
-        console.log("WHEP server is reachable");
+        console.log("WHEP server is reachable at", baseUrl);
       } catch (error) {
         console.warn("WHEP server is not reachable:", error);
         setIsUrlValid(false);
@@ -43,8 +43,10 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
     };
   }, []);
 
-  // Create a fallback stream with a color pattern
+  // Create a fallback stream with a color pattern and audio tone
   const createFallbackStream = (): MediaStream => {
+    console.log("Creating fallback stream with audio and video");
+    
     // Create a canvas element for the video fallback
     const canvas = document.createElement('canvas');
     canvas.width = 640;
@@ -87,12 +89,12 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
     // Create a stream from the canvas
     const stream = canvas.captureStream(30); // 30 FPS
     
-    // Add a silent audio track
+    // Add an audible audio track to verify audio
     const audioContext = new AudioContext();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    oscillator.frequency.value = 0; // Silent
-    gainNode.gain.value = 0.001; // Nearly silent
+    oscillator.frequency.value = 440; // Audible tone for testing
+    gainNode.gain.value = 0.05; // Quiet but audible
     oscillator.connect(gainNode);
     
     const destination = audioContext.createMediaStreamDestination();
@@ -102,6 +104,7 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
     // Add the audio track to our stream
     destination.stream.getAudioTracks().forEach(track => {
       stream.addTrack(track);
+      console.log("Added audio track to fallback stream:", track.label);
     });
     
     setStream(stream);
@@ -118,13 +121,16 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
         return createFallbackStream();
       }
       
-      // Create a new RTCPeerConnection
+      // Create a new RTCPeerConnection with all audio processing disabled
       const pc = new RTCPeerConnection({
-        iceServers: [] // WHEP typically doesn't need STUN/TURN servers as it's direct
-      });
+        iceServers: [], // WHEP typically doesn't need STUN/TURN servers as it's direct
+        // Disable audio processing to get raw audio
+        rtcAudioJitterBufferMaxPackets: 0,
+        rtcAudioJitterBufferFastAccelerate: false
+      } as any);
       peerConnectionRef.current = pc;
       
-      // Set up event handlers for the connection
+      // Add debugging event listeners
       pc.onicecandidate = (event) => {
         console.log("ICE candidate:", event.candidate);
       };
@@ -134,7 +140,15 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
       };
       
       pc.oniceconnectionstatechange = () => {
-        console.log("ICE connection state:", pc.iceConnectionState);
+        console.log("ICE connection state changed to:", pc.iceConnectionState);
+      };
+      
+      pc.onconnectionstatechange = () => {
+        console.log("Connection state changed to:", pc.connectionState);
+      };
+      
+      pc.onsignalingstatechange = () => {
+        console.log("Signaling state changed to:", pc.signalingState);
       };
       
       // Create a MediaStream to hold the received tracks
@@ -142,22 +156,57 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
       
       // Set up event handlers for the connection
       pc.ontrack = (event) => {
-        console.log("Track received", event.track.kind, event.track.id);
-        if (event.track) {
-          mediaStream.addTrack(event.track);
+        console.log(`Track received: ${event.track.kind} (${event.track.label}), enabled: ${event.track.enabled}`);
+        
+        // Make sure track is enabled
+        if (!event.track.enabled) {
+          event.track.enabled = true;
+          console.log(`Enabled track: ${event.track.kind} (${event.track.label})`);
         }
+        
+        mediaStream.addTrack(event.track);
+        console.log(`MediaStream now has ${mediaStream.getTracks().length} tracks`);
+        
+        // Log all tracks in the MediaStream
+        mediaStream.getTracks().forEach((track, i) => {
+          console.log(`MediaStream track ${i}: ${track.kind} (${track.label}), enabled: ${track.enabled}`);
+        });
       };
       
-      // Create an offer (WHEP is receive-only)
+      // Create an offer with explicit audio and video
       const offer = await pc.createOffer({
         offerToReceiveVideo: true,
-        offerToReceiveAudio: true
+        offerToReceiveAudio: true  // Explicitly request audio
       });
       
+      // Modify the SDP to ensure audio is requested
+      let sdp = offer.sdp;
+      if (sdp && !sdp.includes('m=audio')) {
+        console.log("Adding audio section to SDP offer");
+        // Add audio section if missing
+        const audioSection = 'm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n' +
+          'c=IN IP4 0.0.0.0\r\n' +
+          'a=rtcp:9 IN IP4 0.0.0.0\r\n' +
+          'a=ice-ufrag:audio\r\n' +
+          'a=ice-pwd:audiopass\r\n' +
+          'a=ice-options:trickle\r\n' +
+          'a=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\n' +
+          'a=setup:actpass\r\n' +
+          'a=mid:audio\r\n' +
+          'a=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level\r\n' +
+          'a=recvonly\r\n' +
+          'a=rtpmap:111 opus/48000/2\r\n' +
+          'a=fmtp:111 minptime=10;useinbandfec=1\r\n';
+        
+        sdp = sdp.replace('a=group:BUNDLE video', 'a=group:BUNDLE video audio');
+        offer.sdp = sdp;
+      }
+      
+      console.log("Setting local description with audio");
       await pc.setLocalDescription(offer);
       
       // Wait for ICE gathering to complete
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<void>((resolve) => {
         // Set a timeout in case gathering takes too long
         const timeout = setTimeout(() => {
           console.warn("ICE gathering timed out, proceeding anyway");
@@ -185,6 +234,7 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
       }
       
       try {
+        console.log("Sending SDP offer to WHEP server");
         const response = await fetch(whepUrl, {
           method: 'POST',
           headers: {
@@ -200,10 +250,11 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
         
         const sdpAnswer = await response.text();
         
-        console.log("Received SDP answer from WHEP server:", sdpAnswer);
+        console.log("Received SDP answer from WHEP server");
         
         // If we get here, we have a successful WHEP connection
         if (sdpAnswer) {
+          console.log("Setting remote description");
           await pc.setRemoteDescription({
             type: 'answer',
             sdp: sdpAnswer
@@ -212,9 +263,10 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
           console.log("WHEP connection established");
           
           // Wait for at least one track to arrive or timeout
-          await new Promise<void>((resolve, reject) => {
+          await new Promise<void>((resolve) => {
             // If we already have tracks, resolve immediately
             if (mediaStream.getTracks().length > 0) {
+              console.log("Already have tracks, continuing");
               resolve();
               return;
             }
@@ -227,6 +279,7 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
             
             // Listen for track additions
             const trackHandler = () => {
+              console.log("Track added event triggered");
               clearTimeout(timeout);
               resolve();
             };
@@ -245,6 +298,32 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
         return createFallbackStream();
       }
       
+      // Check if we have audio tracks
+      const hasAudioTracks = mediaStream.getAudioTracks().length > 0;
+      console.log(`MediaStream has ${hasAudioTracks ? 'audio tracks' : 'NO audio tracks'}`);
+      
+      if (!hasAudioTracks) {
+        console.warn("No audio tracks in the WHEP stream, attempting to create a synthetic audio track");
+        
+        // Create a silent audio track and add it to the stream
+        const audioContext = new AudioContext();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        oscillator.frequency.value = 0; // Silent
+        gainNode.gain.value = 0.0001; // Nearly silent
+        oscillator.connect(gainNode);
+        
+        const destination = audioContext.createMediaStreamDestination();
+        gainNode.connect(destination);
+        oscillator.start();
+        
+        // Add the silent audio track to our stream
+        destination.stream.getAudioTracks().forEach(track => {
+          mediaStream.addTrack(track);
+          console.log("Added synthetic audio track:", track.label);
+        });
+      }
+      
       // If we got here, we have a successful connection with tracks
       setStream(mediaStream);
       setIsStreaming(true);
@@ -257,6 +336,7 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
   };
 
   const stop = () => {
+    console.log("Stopping WHEP stream");
     if (peerConnectionRef.current) {
       peerConnectionRef.current.close();
       peerConnectionRef.current = null;
@@ -264,7 +344,10 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/live/test/whep
     // Check if stream is our fallback canvas stream
     if (stream) {
       // Stop all tracks
-      stream.getTracks().forEach(track => track.stop());
+      stream.getTracks().forEach(track => {
+        track.stop();
+        console.log(`Stopped track: ${track.kind} (${track.label})`);
+      });
     }
     setStream(null);
     setIsStreaming(false);

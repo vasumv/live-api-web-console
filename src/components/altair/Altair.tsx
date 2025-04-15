@@ -85,6 +85,9 @@ function AltairComponent() {
       
       7. POST-BREW:
          - Perform post-purge by pulling lever for a few seconds
+
+      You are tasked with guiding through each step of the espresso brewing. Instruct users on what to do, one step at a time. Then,
+      check that they have done it correctly.
       
       When responding to users:
       - First determine which step they're likely on based on their message
@@ -100,6 +103,13 @@ function AltairComponent() {
           },
         ],
       },
+      // systemInstruction: {
+      //   parts: [
+      //     {
+      //       text: 'You are my helpful assistant. Any time I ask you for a graph call the "render_altair" function I have provided you. Dont ask for additional information just make your best judgement.',
+      //     },
+      //   ],
+      // },
       tools: [
         // there is a free-tier quota for search
         { googleSearch: {} },

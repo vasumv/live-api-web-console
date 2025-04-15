@@ -62,18 +62,16 @@ function ControlTray({
   onVideoStreamChange = () => {},
   supportsVideo,
 }: ControlTrayProps) {
-  // Initialize the video streams
-  const whepStream = useWhepStream();
-  const screenCapture = useScreenCapture();
-  const videoStreams = [whepStream, screenCapture];
+  const videoStreams = [useWhepStream(), useScreenCapture()];
   const [activeVideoStream, setActiveVideoStream] =
     useState<MediaStream | null>(null);
-  
+  const [whepStream, screenCapture] = videoStreams;
   const [inVolume, setInVolume] = useState(0);
   const [audioRecorder] = useState(() => new AudioRecorder());
   const [muted, setMuted] = useState(false);
   const renderCanvasRef = useRef<HTMLCanvasElement>(null);
   const connectButtonRef = useRef<HTMLButtonElement>(null);
+  const audioStartedRef = useRef<boolean>(false);
 
   const { client, connected, connect, disconnect, volume } =
     useLiveAPIContext();
@@ -91,41 +89,60 @@ function ControlTray({
     );
   }, [inVolume]);
 
-  // Audio handling - using laptop microphone only
+  // Main audio streaming effect
   useEffect(() => {
+    // Make sure we don't try to start recording multiple times
+    if (audioStartedRef.current) {
+      return;
+    }
+
     const onData = (base64: string) => {
-      client.sendRealtimeInput([
-        {
-          mimeType: "audio/pcm;rate=16000",
-          data: base64,
-        },
-      ]);
+      if (connected && !muted) {
+        client.sendRealtimeInput([
+          {
+            mimeType: "audio/pcm;rate=16000",
+            data: base64,
+          },
+        ]);
+      }
     };
     
     const startAudioRecording = async () => {
       if (connected && !muted && audioRecorder) {
         try {
-          console.log("Starting microphone audio recording");
-          await audioRecorder.start();
+          console.log("Starting audio recorder...");
+          audioStartedRef.current = true;
           
-          let audioPacketCount = 0;
-          const volumeDebugger = (volume: number) => {
-            audioPacketCount++;
-            if (audioPacketCount % 30 === 0) {
-              console.log(`Audio packet #${audioPacketCount}, volume: ${volume.toFixed(4)}`);
-            }
-            setInVolume(volume);
-          };
+          // If there's an active video stream with audio tracks, use that
+          if (activeVideoStream && activeVideoStream.getAudioTracks().length > 0) {
+            console.log("Using audio tracks from video stream:", 
+                         activeVideoStream.getAudioTracks().map(t => `${t.label} (enabled: ${t.enabled})`));
+            
+            // Ensure tracks are enabled
+            activeVideoStream.getAudioTracks().forEach(track => {
+              track.enabled = true;
+              console.log(`Track ${track.label} enabled status: ${track.enabled}`);
+            });
+            
+            await audioRecorder.start(activeVideoStream);
+          } else {
+            // Otherwise try to get microphone or use fallback
+            console.log("No video stream audio tracks found, using microphone");
+            await audioRecorder.start();
+          }
           
-          audioRecorder.on("data", onData).on("volume", volumeDebugger);
+          audioRecorder
+            .on("data", onData)
+            .on("volume", setInVolume);
+            
+          console.log("Audio recorder started successfully");
         } catch (err) {
           console.error("Failed to start audio recording:", err);
+          audioStartedRef.current = false;
         }
-      } else {
-        if (audioRecorder.recording) {
-          console.log("Stopping audio recording");
-          audioRecorder.stop();
-        }
+      } else if (!connected || muted) {
+        audioRecorder.stop();
+        audioStartedRef.current = false;
       }
     };
     
@@ -133,78 +150,59 @@ function ControlTray({
     
     return () => {
       audioRecorder.off("data", onData).off("volume", setInVolume);
+      if (audioStartedRef.current) {
+        audioRecorder.stop();
+        audioStartedRef.current = false;
+      }
     };
-  }, [connected, client, muted, audioRecorder]);
+  }, [connected, client, muted, audioRecorder, activeVideoStream]);
 
-  // Video frame capture
+  // Reset audio started ref when connection state changes
+  useEffect(() => {
+    if (!connected) {
+      audioStartedRef.current = false;
+    }
+  }, [connected]);
+
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.srcObject = activeVideoStream;
+      
+      // Ensure audio is enabled for the video element
+      if (videoRef.current.muted) {
+        videoRef.current.muted = false;
+      }
+      
+      // Set volume to 1 (max)
+      videoRef.current.volume = 1.0;
     }
 
     let timeoutId = -1;
-    let frameCount = 0;
-    let lastFrameTime = Date.now();
 
     function sendVideoFrame() {
       const video = videoRef.current;
       const canvas = renderCanvasRef.current;
 
       if (!video || !canvas) {
-        console.warn("Video or canvas ref is null");
         return;
       }
 
       const ctx = canvas.getContext("2d")!;
-      
-      // Check if video has valid dimensions
-      if (video.videoWidth === 0 || video.videoHeight === 0) {
-        console.warn("Video has zero dimensions, skipping frame capture");
-        if (connected) {
-          timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
-        }
-        return;
-      }
-      
       canvas.width = video.videoWidth * 0.25;
       canvas.height = video.videoHeight * 0.25;
-      
-      // Log frame dimensions occasionally
-      frameCount++;
-      if (frameCount % 10 === 0) {
-        const now = Date.now();
-        const fps = 10 / ((now - lastFrameTime) / 1000);
-        console.log(`Capturing frames: ${canvas.width}x${canvas.height} at ~${fps.toFixed(1)} FPS`);
-        lastFrameTime = now;
-      }
-      
-      try {
+      if (canvas.width + canvas.height > 0) {
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const base64 = canvas.toDataURL("image/jpeg", 0.8);
+        const base64 = canvas.toDataURL("image/jpeg", 1.0);
         const data = base64.slice(base64.indexOf(",") + 1, Infinity);
         client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
-      } catch (err) {
-        console.error("Error capturing video frame:", err);
       }
-      
       if (connected) {
         timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
       }
     }
-    
     if (connected && activeVideoStream !== null) {
-      console.log("Starting video frame capture");
-      // Wait a moment for the video to initialize
-      timeoutId = window.setTimeout(() => {
-        if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA or better
-          requestAnimationFrame(sendVideoFrame);
-        } else {
-          console.warn("Video not ready, delaying frame capture");
-          timeoutId = window.setTimeout(() => requestAnimationFrame(sendVideoFrame), 1000);
-        }
-      }, 500);
+      requestAnimationFrame(sendVideoFrame);
     }
-    
     return () => {
       clearTimeout(timeoutId);
     };
@@ -212,16 +210,52 @@ function ControlTray({
 
   //handler for swapping from one video-stream to the next
   const changeStreams = (next?: UseMediaStreamResult) => async () => {
-    if (next) {
-      const mediaStream = await next.start();
-      setActiveVideoStream(mediaStream);
-      onVideoStreamChange(mediaStream);
-    } else {
-      setActiveVideoStream(null);
-      onVideoStreamChange(null);
-    }
+    try {
+      // First stop current audio recording if active
+      if (audioStartedRef.current) {
+        audioRecorder.stop();
+        audioStartedRef.current = false;
+      }
+      
+      if (next) {
+        const mediaStream = await next.start();
+        
+        // Log audio tracks in the stream
+        const audioTracks = mediaStream.getAudioTracks();
+        console.log(`Media stream has ${audioTracks.length} audio tracks:`, 
+                     audioTracks.map(t => `${t.label} (enabled: ${t.enabled})`));
+        
+        // Make sure audio tracks are enabled
+        audioTracks.forEach(track => {
+          if (!track.enabled) {
+            console.log(`Enabling audio track: ${track.label}`);
+            track.enabled = true;
+          }
+        });
+        
+        setActiveVideoStream(mediaStream);
+        onVideoStreamChange(mediaStream);
+        
+        // Start audio recorder after setting the new stream
+        if (connected && !muted) {
+          setTimeout(() => {
+            if (audioStartedRef.current) {
+              audioRecorder.stop();
+            }
+            audioStartedRef.current = false;
+            audioRecorder.start(mediaStream);
+            audioStartedRef.current = true;
+          }, 500);
+        }
+      } else {
+        setActiveVideoStream(null);
+        onVideoStreamChange(null);
+      }
 
-    videoStreams.filter((msr) => msr !== next).forEach((msr) => msr.stop());
+      videoStreams.filter((msr) => msr !== next).forEach((msr) => msr.stop());
+    } catch (error) {
+      console.error("Error changing streams:", error);
+    }
   };
 
   return (
@@ -230,7 +264,20 @@ function ControlTray({
       <nav className={cn("actions-nav", { disabled: !connected })}>
         <button
           className={cn("action-button mic-button")}
-          onClick={() => setMuted(!muted)}
+          onClick={() => {
+            setMuted(!muted);
+            if (muted && connected && activeVideoStream) {
+              // If unmuting, restart audio recorder
+              setTimeout(() => {
+                if (audioStartedRef.current) {
+                  audioRecorder.stop();
+                }
+                audioStartedRef.current = false;
+                audioRecorder.start(activeVideoStream);
+                audioStartedRef.current = true;
+              }, 100);
+            }
+          }}
         >
           {!muted ? (
             <span className="material-symbols-outlined filled">mic</span>
@@ -271,11 +318,16 @@ function ControlTray({
             className={cn("action-button connect-toggle", { connected })}
             onClick={async () => {
               if (connected) {
+                // If connected, disconnect
                 disconnect();
+                if (audioStartedRef.current) {
+                  audioRecorder.stop();
+                  audioStartedRef.current = false;
+                }
               } else {
+                // If not connected, connect to API and start WHEP stream
                 try {
                   await connect();
-                  
                   // Auto-start the WHEP stream if not already streaming
                   if (!whepStream.isStreaming && !activeVideoStream) {
                     changeStreams(whepStream)();

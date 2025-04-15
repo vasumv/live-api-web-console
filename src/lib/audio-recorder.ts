@@ -38,6 +38,7 @@ export class AudioRecorder extends EventEmitter {
   recording: boolean = false;
   recordingWorklet: AudioWorkletNode | undefined;
   vuWorklet: AudioWorkletNode | undefined;
+  externalAudioTrack: MediaStreamTrack | null = null;
 
   private starting: Promise<void> | null = null;
 
@@ -45,37 +46,55 @@ export class AudioRecorder extends EventEmitter {
     super();
   }
 
-  async start() {
+  async start(externalAudioStream?: MediaStream) {
     if (this.recording) {
-      console.log("AudioRecorder: Already recording, stopping first");
-      this.stop();
+      return; // Already recording
     }
 
     this.starting = new Promise(async (resolve, reject) => {
       try {
-        console.log("AudioRecorder: Attempting to start microphone recording");
-        
-        try {
-          this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          console.log("AudioRecorder: Got microphone access");
-        } catch (err) {
-          console.warn("AudioRecorder: Failed to get microphone, using silent audio stream", err);
-          // Create a silent audio stream as fallback
-          this.audioContext = await audioContext({ sampleRate: this.sampleRate });
-          const silentOsc = this.audioContext.createOscillator();
-          silentOsc.frequency.value = 0; // Essentially silent
-          const gainNode = this.audioContext.createGain();
-          gainNode.gain.value = 0.0001; // Nearly muted
-          silentOsc.connect(gainNode);
+        // Use the external audio stream if provided, otherwise try to get the microphone
+        if (externalAudioStream && externalAudioStream.getAudioTracks().length > 0) {
+          console.log("AudioRecorder: Using external audio stream with tracks:", 
+            externalAudioStream.getAudioTracks().map(t => `${t.label} (enabled: ${t.enabled})`));
+            
+          // Make sure we enable the audio tracks in case they're disabled
+          externalAudioStream.getAudioTracks().forEach(track => {
+            if (!track.enabled) {
+              console.log(`Enabling audio track: ${track.label}`);
+              track.enabled = true;
+            }
+          });
           
-          const destination = this.audioContext.createMediaStreamDestination();
-          gainNode.connect(destination);
-          silentOsc.start();
-          this.stream = destination.stream;
-          console.log("AudioRecorder: Created silent fallback stream");
+          // Create a new stream with just the audio tracks
+          this.stream = new MediaStream(externalAudioStream.getAudioTracks());
+          this.externalAudioTrack = externalAudioStream.getAudioTracks()[0];
+        } else {
+          try {
+            console.log("AudioRecorder: Trying to get microphone access");
+            this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (err) {
+            console.warn("Failed to get microphone, using silent audio stream", err);
+            // Create a silent audio stream as fallback
+            this.audioContext = await audioContext({ sampleRate: this.sampleRate });
+            const silentOsc = this.audioContext.createOscillator();
+            silentOsc.frequency.value = 0; // Essentially silent
+            const gainNode = this.audioContext.createGain();
+            gainNode.gain.value = 0.0001; // Nearly muted
+            silentOsc.connect(gainNode);
+            
+            const destination = this.audioContext.createMediaStreamDestination();
+            gainNode.connect(destination);
+            silentOsc.start();
+            this.stream = destination.stream;
+          }
         }
 
-        console.log("AudioRecorder: Creating audio context with sample rate:", this.sampleRate);
+        if (!this.stream) {
+          throw new Error("No audio stream available");
+        }
+
+        console.log("AudioRecorder: Creating audio context with sample rate", this.sampleRate);
         this.audioContext = await audioContext({ sampleRate: this.sampleRate });
         this.source = this.audioContext.createMediaStreamSource(this.stream);
 
@@ -89,7 +108,6 @@ export class AudioRecorder extends EventEmitter {
           workletName,
         );
 
-        console.log("AudioRecorder: Setting up worklet message handling");
         this.recordingWorklet.port.onmessage = async (ev: MessageEvent) => {
           // worklet processes recording floats and messages converted buffer
           const arrayBuffer = ev.data.data.int16arrayBuffer;
@@ -103,7 +121,6 @@ export class AudioRecorder extends EventEmitter {
 
         // vu meter worklet
         const vuWorkletName = "vu-meter";
-        console.log("AudioRecorder: Adding VU meter worklet");
         await this.audioContext.audioWorklet.addModule(
           createWorketFromSrc(vuWorkletName, VolMeterWorket),
         );
@@ -114,11 +131,11 @@ export class AudioRecorder extends EventEmitter {
 
         this.source.connect(this.vuWorklet);
         this.recording = true;
-        console.log("AudioRecorder: Started successfully");
+        console.log("AudioRecorder: Recording started successfully");
         resolve();
         this.starting = null;
       } catch (error) {
-        console.error("AudioRecorder: Error starting audio recorder:", error);
+        console.error("Error starting audio recorder:", error);
         reject(error);
         this.starting = null;
       }
@@ -131,13 +148,19 @@ export class AudioRecorder extends EventEmitter {
     // its plausible that stop would be called before start completes
     // such as if the websocket immediately hangs up
     const handleStop = () => {
+      console.log("AudioRecorder: Stopping audio recording");
       this.source?.disconnect();
-      if (this.stream) {
+      if (this.stream && !this.externalAudioTrack) {
+        // Don't stop tracks if they came from an external stream
+        console.log("AudioRecorder: Stopping internal stream tracks");
         this.stream.getTracks().forEach((track) => track.stop());
+      } else {
+        console.log("AudioRecorder: Not stopping external audio tracks");
       }
       this.stream = undefined;
       this.recordingWorklet = undefined;
       this.vuWorklet = undefined;
+      this.externalAudioTrack = null;
       this.recording = false;
     };
     if (this.starting) {
