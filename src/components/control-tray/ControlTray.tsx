@@ -62,10 +62,13 @@ function ControlTray({
   onVideoStreamChange = () => {},
   supportsVideo,
 }: ControlTrayProps) {
-  const videoStreams = [useWhepStream(), useScreenCapture()];
+  // Initialize the video streams
+  const whepStream = useWhepStream();
+  const screenCapture = useScreenCapture();
+  const videoStreams = [whepStream, screenCapture];
   const [activeVideoStream, setActiveVideoStream] =
     useState<MediaStream | null>(null);
-  const [whepStream, screenCapture] = videoStreams;
+  
   const [inVolume, setInVolume] = useState(0);
   const [audioRecorder] = useState(() => new AudioRecorder());
   const [muted, setMuted] = useState(false);
@@ -80,6 +83,7 @@ function ControlTray({
       connectButtonRef.current.focus();
     }
   }, [connected]);
+  
   useEffect(() => {
     document.documentElement.style.setProperty(
       "--volume",
@@ -87,6 +91,7 @@ function ControlTray({
     );
   }, [inVolume]);
 
+  // Audio handling - using laptop microphone only
   useEffect(() => {
     const onData = (base64: string) => {
       client.sendRealtimeInput([
@@ -100,19 +105,27 @@ function ControlTray({
     const startAudioRecording = async () => {
       if (connected && !muted && audioRecorder) {
         try {
-          // If there's an active video stream with audio tracks, use that
-          if (activeVideoStream && activeVideoStream.getAudioTracks().length > 0) {
-            await audioRecorder.start(activeVideoStream);
-          } else {
-            // Otherwise try to get microphone or use fallback
-            await audioRecorder.start();
-          }
-          audioRecorder.on("data", onData).on("volume", setInVolume);
+          console.log("Starting microphone audio recording");
+          await audioRecorder.start();
+          
+          let audioPacketCount = 0;
+          const volumeDebugger = (volume: number) => {
+            audioPacketCount++;
+            if (audioPacketCount % 30 === 0) {
+              console.log(`Audio packet #${audioPacketCount}, volume: ${volume.toFixed(4)}`);
+            }
+            setInVolume(volume);
+          };
+          
+          audioRecorder.on("data", onData).on("volume", volumeDebugger);
         } catch (err) {
           console.error("Failed to start audio recording:", err);
         }
       } else {
-        audioRecorder.stop();
+        if (audioRecorder.recording) {
+          console.log("Stopping audio recording");
+          audioRecorder.stop();
+        }
       }
     };
     
@@ -121,39 +134,77 @@ function ControlTray({
     return () => {
       audioRecorder.off("data", onData).off("volume", setInVolume);
     };
-  }, [connected, client, muted, audioRecorder, activeVideoStream]);
+  }, [connected, client, muted, audioRecorder]);
 
+  // Video frame capture
   useEffect(() => {
     if (videoRef.current) {
       videoRef.current.srcObject = activeVideoStream;
     }
 
     let timeoutId = -1;
+    let frameCount = 0;
+    let lastFrameTime = Date.now();
 
     function sendVideoFrame() {
       const video = videoRef.current;
       const canvas = renderCanvasRef.current;
 
       if (!video || !canvas) {
+        console.warn("Video or canvas ref is null");
         return;
       }
 
       const ctx = canvas.getContext("2d")!;
+      
+      // Check if video has valid dimensions
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        console.warn("Video has zero dimensions, skipping frame capture");
+        if (connected) {
+          timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
+        }
+        return;
+      }
+      
       canvas.width = video.videoWidth * 0.25;
       canvas.height = video.videoHeight * 0.25;
-      if (canvas.width + canvas.height > 0) {
+      
+      // Log frame dimensions occasionally
+      frameCount++;
+      if (frameCount % 10 === 0) {
+        const now = Date.now();
+        const fps = 10 / ((now - lastFrameTime) / 1000);
+        console.log(`Capturing frames: ${canvas.width}x${canvas.height} at ~${fps.toFixed(1)} FPS`);
+        lastFrameTime = now;
+      }
+      
+      try {
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-        const base64 = canvas.toDataURL("image/jpeg", 1.0);
+        const base64 = canvas.toDataURL("image/jpeg", 0.8);
         const data = base64.slice(base64.indexOf(",") + 1, Infinity);
         client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
+      } catch (err) {
+        console.error("Error capturing video frame:", err);
       }
+      
       if (connected) {
         timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
       }
     }
+    
     if (connected && activeVideoStream !== null) {
-      requestAnimationFrame(sendVideoFrame);
+      console.log("Starting video frame capture");
+      // Wait a moment for the video to initialize
+      timeoutId = window.setTimeout(() => {
+        if (videoRef.current && videoRef.current.readyState >= 2) { // HAVE_CURRENT_DATA or better
+          requestAnimationFrame(sendVideoFrame);
+        } else {
+          console.warn("Video not ready, delaying frame capture");
+          timeoutId = window.setTimeout(() => requestAnimationFrame(sendVideoFrame), 1000);
+        }
+      }, 500);
     }
+    
     return () => {
       clearTimeout(timeoutId);
     };
@@ -220,12 +271,11 @@ function ControlTray({
             className={cn("action-button connect-toggle", { connected })}
             onClick={async () => {
               if (connected) {
-                // If connected, disconnect
                 disconnect();
               } else {
-                // If not connected, connect to API and start WHEP stream
                 try {
                   await connect();
+                  
                   // Auto-start the WHEP stream if not already streaming
                   if (!whepStream.isStreaming && !activeVideoStream) {
                     changeStreams(whepStream)();
