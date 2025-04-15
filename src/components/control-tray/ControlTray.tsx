@@ -168,13 +168,11 @@ function ControlTray({
     if (videoRef.current) {
       videoRef.current.srcObject = activeVideoStream;
       
-      // Ensure audio is enabled for the video element
-      if (videoRef.current.muted) {
-        videoRef.current.muted = false;
+      // Keep the video element muted - we don't want to hear the stream audio
+      // Only the Gemini audio output should be heard
+      if (!videoRef.current.muted) {
+        videoRef.current.muted = true;
       }
-      
-      // Set volume to 1 (max)
-      videoRef.current.volume = 1.0;
     }
 
     let timeoutId = -1;

@@ -55,6 +55,7 @@ function App() {
                 ref={videoRef}
                 autoPlay
                 playsInline
+                muted={true} /* Mute the video element so we don't hear the stream audio */
               />
               
               {/* Audio debug overlay (conditional) */}
