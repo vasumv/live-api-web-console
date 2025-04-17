@@ -119,6 +119,7 @@ function ControlTray({
       }
     };
     
+    
     const startAudioRecording = async () => {
       if (connected && !muted && audioRecorder) {
         try {

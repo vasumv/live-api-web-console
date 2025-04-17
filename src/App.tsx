@@ -24,6 +24,7 @@ import AudioStreamDebug from "./AudioStreamDebug";
 import VolumeControl from "./components/volume-control/VolumeControl";
 import { AudioRecorder } from "./lib/audio-recorder";
 import cn from "classnames";
+import { Expresso } from "./components/espresso/Expresso";
 
 const API_KEY = process.env.REACT_APP_GEMINI_API_KEY as string;
 if (typeof API_KEY !== "string") {
@@ -53,7 +54,8 @@ function App() {
           <main>
             <div className="main-app-area">
               {/* APP goes here */}
-              <Altair />
+              {/* <Altair /> */}
+              <Expresso />
               <video
                 className={cn("stream", {
                   hidden: !videoRef.current || !videoStream,
