@@ -44,6 +44,14 @@
       border: 1px solid var(--Blue-500);
     }
   }
+
+  &.settings-button {
+    color: var(--Neutral-80);
+    
+    &:hover {
+      background-color: var(--Neutral-10);
+    }
+  }
 }
 
 @property --volume {
