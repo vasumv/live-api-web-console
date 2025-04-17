@@ -41,8 +41,10 @@ export type LiveConfig = {
   tools?: Array<Tool | { googleSearch: {} } | { codeExecution: {} }>;
 };
 
+export type Modality = "text" | "audio" | "image";
+
 export type LiveGenerationConfig = GenerationConfig & {
-  responseModalities: "text" | "audio" | "image";
+  responseModalities: Modality | Modality[];
   speechConfig?: {
     voiceConfig?: {
       prebuiltVoiceConfig?: {

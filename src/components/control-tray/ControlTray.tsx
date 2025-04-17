@@ -101,13 +101,18 @@ function ControlTray({
   // Audio handling - using laptop microphone only
   useEffect(() => {
     const onData = (base64: string) => {
-      client.sendRealtimeInput([
-        {
-          mimeType: "audio/pcm;rate=16000",
-          data: base64,
-        },
-      ]);
+      if (client?.ws?.readyState === WebSocket.OPEN) {
+        client.sendRealtimeInput([
+          {
+            mimeType: "audio/pcm;rate=16000",
+            data: base64,
+          },
+        ]);
+      } else {
+        console.warn("WebSocket not ready – skipping audio packet");
+      }
     };
+    
     
     const startAudioRecording = async () => {
       if (connected && !muted && audioRecorder) {
