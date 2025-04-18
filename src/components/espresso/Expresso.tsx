@@ -29,12 +29,17 @@ interface ResponseJson {
   currentStep: string;
   currentStepDetailedDescription: string;
   chatResponse: string;
+  currentStepExplanation: string; // Added explanation field
 }
 
 const declaration: FunctionDeclaration = {
   name: "update_task_progress",
   description: `
-Updates the completion status of a task step.
+This function is used to Updates the completion status of a task step. If you have determined
+that the user has completed a step, call this function with the value \`true\` for \`isComplete\`,
+along with an explanation of what was completed for \`explanation\`. If you have determined 
+that the user has not finished the step, call this function with the value \`false\` and an 
+explanation.
 
 **→ CRITICAL RULE - CALL THIS FUNCTION ONLY WHEN THE USER'S EXACT WORDS CLEARLY SIGNAL COMPLETION.**  
 A call is allowed *only* if the entire user utterance (case-insensitive) contains **one** of the exact phrases below
@@ -104,17 +109,22 @@ function ExpressoComponent() {
           ════════════════════════════════════════════════════════════
           WHEN A NEW TASK IS REQUESTED
           ════════════════════════════════════════════════════════════
-          1. Break the task into clear, atomic steps (step1, step2, …).  
+          1. Break the task into clear, fine-grained steps (step1, step2, …). Be very thorough and don't make the steps too large. 
           2. Return *only* the JSON object described below.  
           3. Wait for the user to say **“yes”** to confirm the plan before you proceed.
-
+          ════════════════════════════════════════════════════════════
+          WHEN A STEP IS BEING WORKED ON  
+          ════════════════════════════════════════════════════════════
+          1. Use the video feed to reason about whether the step is completed 
+          2. Only return isCompleted: true if the user's actions clearly indicate the step is done. Do not rely on the user, i.e. if they say its complete ensure based on the video stream thats the case, else let them know that they did not complete that step.  
           ════════════════════════════════════════════════════════════
           JSON RESPONSE FORMAT (Always—no extra text!)
           ════════════════════════════════════════════════════════════
           {
+            "currentStepExplanation": <explanation of whether the current step was completed based on the video> 
             "steps": {
-              "step1": { "text": "<short label>", "isComplete": false },
-              "step2": { "text": "<short label>", "isComplete": false },
+              "step1": { "text": "<short label>", "isComplete": false}, # MAKE SURE THE VIDEO HAS SHOWN THE STEP BEING COMPLETED
+              "step2": { "text": "<short label>", "isComplete": false}, # MAKE SURE THE VIDEO HAS SHOWN THE STEP BEING COMPLETED
               …
             },
             "currentStep": "step1" | "step2" | …  // the first *incomplete* step
@@ -126,34 +136,15 @@ function ExpressoComponent() {
           • \`currentStepDetailedDescription\` is your actionable guidance.  
           • \`chatResponse\` is short and conversational (“Great—tell me when you're done!”).
 
-          ════════════════════════════════════════════════════════════
-          STEP-COMPLETION RULE  (MUST follow exactly)
-          ════════════════════════════════════════════════════════════
-          **Call \`update_task_progress\` ONLY when the user's utterance contains one of
-          the exact phrases below (case-insensitive):**
-
-            - "done" • "i'm done" • "i am done"  
-            - "finished" • "i'm finished" • "i am finished"  
-            - "completed" • "i've completed …" • "i have completed …"  
-            - "step <n> done"
-
-          Anything else (e.g. “ok”, “yes”, “next”, questions, small talk) does **NOT**
-          mark completion. Instead:
-
-            • Keep the same \`currentStep\`.  
-            • Respond with clarification or encouragement in \`chatResponse\`.  
-            • **Do NOT** call the function.
-
-          If you're ever uncertain, politely ask “Have you completed this step?” and wait.
 
           ════════════════════════════════════════════════════════════
           EXAMPLES (Do NOT output these—just guidance for you)
           ════════════════════════════════════════════════════════════
-          User: “I'm done.” → Call \`update_task_progress\`.
 
           User: “Can you repeat that?” → Do not call; re-explain.
 
-          User: “Next!” → No function call; confirm completion first.
+          User: “Next!” → No function call; confirm completion first, by using the video, not the 
+          user's words.
 
           ════════════════════════════════════════════════════════════
           Remember: after confirmation, **only** emit the JSON object on each turn —
@@ -165,7 +156,7 @@ function ExpressoComponent() {
       ,
       tools: [
         { googleSearch: {} },
-        { functionDeclarations: [declaration] },
+        // { functionDeclarations: [declaration] },
       ],
     });
   }, [setConfig]);
@@ -343,6 +334,7 @@ function ExpressoComponent() {
             color: colors.onBackground
           }}>
             {latestResponse.chatResponse}
+            {latestResponse.currentStepExplanation}
           </div>
           
           {/* Two-column layout */}
