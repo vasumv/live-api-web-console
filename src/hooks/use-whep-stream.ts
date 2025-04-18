@@ -178,13 +178,15 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/webrtc_compati
         offerToReceiveVideo: true,
         offerToReceiveAudio: true  // Explicitly request audio
       });
+
+
       
       // Modify the SDP to ensure audio is requested
       let sdp = offer.sdp;
       if (sdp && !sdp.includes('m=audio')) {
         console.log("Adding audio section to SDP offer");
         // Add audio section if missing
-        const audioSection = 'm=audio 9 UDP/TLS/RTP/SAVPF 111\r\n' +
+        const audioSection = 'm=audio 9 UDP/TLS/RTP/SAVPF 0 111\r\n' +
           'c=IN IP4 0.0.0.0\r\n' +
           'a=rtcp:9 IN IP4 0.0.0.0\r\n' +
           'a=ice-ufrag:audio\r\n' +
@@ -195,9 +197,9 @@ export function useWhepStream(whepUrl = "http://172.24.20.92:8889/webrtc_compati
           'a=mid:audio\r\n' +
           'a=extmap:1 urn:ietf:params:rtp-hdrext:ssrc-audio-level\r\n' +
           'a=recvonly\r\n' +
+          'a=rtpmap:0 PCMU/8000\r\n' +
           'a=rtpmap:111 opus/48000/2\r\n' +
           'a=fmtp:111 minptime=10;useinbandfec=1\r\n';
-        
         sdp = sdp.replace('a=group:BUNDLE video', 'a=group:BUNDLE video audio');
         offer.sdp = sdp;
       }

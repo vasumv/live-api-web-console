@@ -21,6 +21,8 @@ import SidePanel from "./components/side-panel/SidePanel";
 import { Altair } from "./components/altair/Altair";
 import ControlTray from "./components/control-tray/ControlTray";
 import AudioStreamDebug from "./AudioStreamDebug";
+import VolumeControl from "./components/volume-control/VolumeControl";
+import { AudioRecorder } from "./lib/audio-recorder";
 import cn from "classnames";
 
 const API_KEY = process.env.REACT_APP_GEMINI_API_KEY as string;
@@ -38,6 +40,10 @@ function App() {
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
   // Debug mode for audio diagnostics
   const [showAudioDebug, setShowAudioDebug] = useState(false);
+  // Show volume control
+  const [showVolumeControl, setShowVolumeControl] = useState(false);
+  // Create a shared audio recorder with initial boost factor of 2.5
+  const [audioRecorder] = useState(() => new AudioRecorder(16000, 2.5));
 
   return (
     <div className="App">
@@ -62,12 +68,18 @@ function App() {
               {showAudioDebug && videoStream && (
                 <AudioStreamDebug stream={videoStream} />
               )}
+              
+              {/* Volume control overlay (conditional) */}
+              {showVolumeControl && (
+                <VolumeControl audioRecorder={audioRecorder} />
+              )}
             </div>
 
             <ControlTray
               videoRef={videoRef}
               supportsVideo={true}
               onVideoStreamChange={setVideoStream}
+              audioRecorder={audioRecorder}
             >
               {/* Audio debug toggle button */}
               <button 
@@ -77,6 +89,17 @@ function App() {
               >
                 <span className="material-symbols-outlined">
                   {showAudioDebug ? "hearing" : "hearing_disabled"}
+                </span>
+              </button>
+              
+              {/* Volume control toggle button */}
+              <button 
+                className="action-button"
+                onClick={() => setShowVolumeControl(!showVolumeControl)}
+                title={showVolumeControl ? "Hide volume control" : "Show volume control"}
+              >
+                <span className="material-symbols-outlined">
+                  {showVolumeControl ? "volume_up" : "volume_off"}
                 </span>
               </button>
             </ControlTray>

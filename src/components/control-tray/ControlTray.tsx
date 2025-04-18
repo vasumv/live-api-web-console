@@ -30,6 +30,7 @@ export type ControlTrayProps = {
   children?: ReactNode;
   supportsVideo: boolean;
   onVideoStreamChange?: (stream: MediaStream | null) => void;
+  audioRecorder?: AudioRecorder | null;
 };
 
 type MediaStreamButtonProps = {
@@ -61,13 +62,15 @@ function ControlTray({
   children,
   onVideoStreamChange = () => {},
   supportsVideo,
+  audioRecorder: providedAudioRecorder = null,
 }: ControlTrayProps) {
   const videoStreams = [useWhepStream(), useScreenCapture()];
   const [activeVideoStream, setActiveVideoStream] =
     useState<MediaStream | null>(null);
   const [whepStream, screenCapture] = videoStreams;
   const [inVolume, setInVolume] = useState(0);
-  const [audioRecorder] = useState(() => new AudioRecorder());
+  // Use provided audioRecorder or create a new one if not provided
+  const [audioRecorder] = useState(() => providedAudioRecorder || new AudioRecorder());
   const [muted, setMuted] = useState(false);
   const renderCanvasRef = useRef<HTMLCanvasElement>(null);
   const connectButtonRef = useRef<HTMLButtonElement>(null);
