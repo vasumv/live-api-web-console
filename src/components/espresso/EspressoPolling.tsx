@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 import { type FunctionDeclaration, SchemaType } from "@google/generative-ai";
-import { useEffect, useState, memo } from "react";
+import { useEffect, useState, memo, useRef, useCallback } from "react";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import { ToolCall, ServerContent, isModelTurn } from "../../multimodal-live-types";
 
@@ -89,6 +89,12 @@ function ExpressoComponent() {
   const [latestRawText, setLatestRawText] = useState<string>("");
   const [isExplanationExpanded, setIsExplanationExpanded] = useState<boolean>(true);
   const { client, setConfig, connect, disconnect } = useLiveAPIContext();
+  // Add polling state and ref
+  const [isPollingEnabled, setIsPollingEnabled] = useState<boolean>(true);
+  const [pollingInterval, setPollingInterval] = useState<number>(5000); // 5 seconds default
+  const pollingTimerRef = useRef<number | null>(null);
+  const [isPolling, setIsPolling] = useState<boolean>(false);
+  const lastPollTimeRef = useRef<number>(0);
 
   useEffect(() => {
     setConfig({
@@ -103,8 +109,7 @@ function ExpressoComponent() {
         parts: [
           {
             text: `
-          You are a hands-on assistant that guides people through real-world, multi-step procedures (espresso brewing, furniture assembly,
-          bike-tire repairs, lab protocols, etc.).
+          You are a hands-on assistant that guides people through real-world, multi-step procedures (espresso brewing, furniture assembly, bike-tire repairs, lab protocols, etc.).
 
           ════════════════════════════════════════════════════════════
           WHEN A NEW TASK IS REQUESTED
@@ -211,11 +216,22 @@ function ExpressoComponent() {
     
     const onContent = (content: ServerContent) => {
       console.log("Received content:", content);
+      
+      // Reset polling state when we get any content
+      setIsPolling(false);
+      
       // Extract text from content if it's a ModelTurn
       if (isModelTurn(content) && content.modelTurn && content.modelTurn.parts) {
         const textParts = content.modelTurn.parts.filter(part => part.text);
         if (textParts.length > 0) {
           const newText = textParts.map(part => part.text).join("\n");
+          
+          // Ignore status check responses to avoid UI disruption
+          if (newText.includes("_status_check_")) {
+            console.log("Ignoring status check response");
+            return;
+          }
+          
           setLatestRawText(newText);
           try {
             // Try to parse the JSON response
@@ -254,11 +270,80 @@ function ExpressoComponent() {
     };
   }, [client, latestResponse]);
   
+  // Add the polling function
+  const pollForUpdates = useCallback(() => {
+    if (!client) return;
+    
+    // Don't poll if:
+    // 1. Currently polling
+    // 2. No active conversation yet
+    // 3. Last poll was less than 1 second ago (debounce)
+    if (isPolling || 
+        (!latestResponse && !latestRawText) || 
+        (Date.now() - lastPollTimeRef.current < 1000)) {
+      return;
+    }
+    
+    try {
+      setIsPolling(true);
+      lastPollTimeRef.current = Date.now();
+      
+      // Send a lightweight status check message
+      client.send({
+        text: "_status_check_"
+      }, false); // Set turnComplete to false to avoid creating a new turn
+      
+      console.log("Polling for updates...");
+      
+      // Reset polling state after a timeout (in case we don't get a response)
+      setTimeout(() => {
+        setIsPolling(false);
+      }, 3000);
+    } catch (error) {
+      console.error("Error during status poll:", error);
+      setIsPolling(false);
+    }
+  }, [client, latestResponse, latestRawText, isPolling]);
+
+  // Setup polling interval
+  useEffect(() => {
+    // Clear any existing polling timer
+    if (pollingTimerRef.current) {
+      window.clearInterval(pollingTimerRef.current);
+      pollingTimerRef.current = null;
+    }
+    
+    // Set up new polling if enabled
+    if (isPollingEnabled && pollingInterval > 0) {
+      pollingTimerRef.current = window.setInterval(pollForUpdates, pollingInterval);
+    }
+    
+    // Cleanup function
+    return () => {
+      if (pollingTimerRef.current) {
+        window.clearInterval(pollingTimerRef.current);
+        pollingTimerRef.current = null;
+      }
+    };
+  }, [isPollingEnabled, pollingInterval, pollForUpdates]);
+
+  // Modify the handleClearConversation to reset polling
   const handleClearConversation = async () => {
     // Disconnect and reconnect to reset the conversation
     await disconnect();
     setLatestResponse(null);
     setLatestRawText("");
+    
+    // Restart polling timer if needed
+    if (pollingTimerRef.current) {
+      window.clearInterval(pollingTimerRef.current);
+      pollingTimerRef.current = null;
+    }
+    
+    if (isPollingEnabled) {
+      pollingTimerRef.current = window.setInterval(pollForUpdates, pollingInterval);
+    }
+    
     setTimeout(() => {
       connect();
     }, 500);
@@ -333,22 +418,114 @@ function ExpressoComponent() {
         padding: "12px 16px"
       }}>
         <h2 style={{ margin: 0, fontWeight: 500, fontSize: "18px", color: colors.onBackground }}>Task Assistant</h2>
-        <button 
-          onClick={handleClearConversation} 
-          style={{
-            backgroundColor: colors.primary,
-            color: colors.background,
-            border: "none",
-            borderRadius: "4px",
-            padding: "6px 12px",
-            cursor: "pointer",
-            fontSize: "13px",
-            fontWeight: 500
-          }}
-        >
-          Reset
-        </button>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          {/* Polling interval dropdown */}
+          {isPollingEnabled && (
+            <select
+              value={pollingInterval}
+              onChange={(e) => setPollingInterval(Number(e.target.value))}
+              style={{
+                backgroundColor: colors.surface,
+                color: colors.onBackground,
+                border: `1px solid ${colors.border}`,
+                borderRadius: "4px",
+                padding: "6px 8px",
+                fontSize: "13px",
+                cursor: "pointer"
+              }}
+              title="Set polling frequency"
+            >
+              <option value="2000">2s</option>
+              <option value="5000">5s</option>
+              <option value="10000">10s</option>
+              <option value="30000">30s</option>
+            </select>
+          )}
+          
+          {/* Manual refresh button - always visible */}
+          <button 
+            onClick={pollForUpdates} 
+            disabled={isPolling}
+            style={{
+              backgroundColor: colors.surface,
+              color: isPolling ? colors.onSurfaceVariant : colors.onBackground,
+              border: `1px solid ${colors.border}`,
+              borderRadius: "4px",
+              padding: "6px 12px",
+              cursor: isPolling ? "default" : "pointer",
+              fontSize: "13px",
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center",
+              opacity: isPolling ? 0.7 : 1
+            }}
+            title="Refresh now"
+          >
+            <span className="material-symbols-outlined" style={{ 
+              fontSize: "16px",
+              animation: isPolling ? "spin 1s linear infinite" : "none" 
+            }}>
+              {isPolling ? "sync" : "refresh"}
+            </span>
+          </button>
+          
+          {/* Add polling toggle button */}
+          <button 
+            onClick={() => {
+              const newValue = !isPollingEnabled;
+              setIsPollingEnabled(newValue);
+              
+              // If enabling, immediately poll once
+              if (newValue) {
+                pollForUpdates();
+              }
+            }} 
+            style={{
+              backgroundColor: isPollingEnabled ? colors.primary : colors.surface,
+              color: isPollingEnabled ? colors.background : colors.onSurfaceVariant,
+              border: `1px solid ${isPollingEnabled ? colors.primary : colors.border}`,
+              borderRadius: "4px",
+              padding: "6px 12px",
+              cursor: "pointer",
+              fontSize: "13px",
+              fontWeight: 500,
+              display: "flex",
+              alignItems: "center"
+            }}
+            title={isPollingEnabled ? "Disable auto-refresh" : "Enable auto-refresh"}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: "16px", marginRight: "4px" }}>
+              {isPollingEnabled ? "sync" : "sync_disabled"}
+            </span>
+            {isPollingEnabled ? "Live" : "Manual"}
+          </button>
+          <button 
+            onClick={handleClearConversation} 
+            style={{
+              backgroundColor: colors.primary,
+              color: colors.background,
+              border: "none",
+              borderRadius: "4px",
+              padding: "6px 12px",
+              cursor: "pointer",
+              fontSize: "13px",
+              fontWeight: 500
+            }}
+          >
+            Reset
+          </button>
+        </div>
       </div>
+      
+      {/* Add CSS for the spin animation */}
+      <style>
+        {`
+          @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+        `}
+      </style>
       
       {latestResponse ? (
         <div className="response-container" style={{
