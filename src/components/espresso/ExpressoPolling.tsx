@@ -26,8 +26,8 @@ interface StepInfo {
 
 interface ResponseJson {
   steps: Record<string, StepInfo>;
-  currentStep: string;
-  currentStepDetailedDescription: string;
+  currentStep: string | null;
+  currentStepDetailedDescription: string | null;
   chatResponse: string;
   currentStepExplanation: string; // Added explanation field
 }
@@ -95,6 +95,8 @@ function ExpressoComponent() {
   const pollingTimerRef = useRef<number | null>(null);
   const [isPolling, setIsPolling] = useState<boolean>(false);
   const lastPollTimeRef = useRef<number>(0);
+  // Add state for tracking if we're in the verification stage
+  const [isVerifyingChange, setIsVerifyingChange] = useState<boolean>(false);
 
   useEffect(() => {
     setConfig({
@@ -109,51 +111,35 @@ function ExpressoComponent() {
         parts: [
           {
             text: `
-          You are a hands-on assistant that guides people through real-world, multi-step procedures (espresso brewing, furniture assembly, bike-tire repairs, lab protocols, etc.).
-
-          ════════════════════════════════════════════════════════════
-          WHEN A NEW TASK IS REQUESTED
-          ════════════════════════════════════════════════════════════
-          1. Break the task into clear, fine-grained steps (step1, step2, …). Be very thorough and don't make the steps too large. 
-          2. Return *only* the JSON object described below.  
-          3. Wait for the user to say **"yes"** to confirm the plan before you proceed.
-          ════════════════════════════════════════════════════════════
-          WHEN A STEP IS BEING WORKED ON  
-          ════════════════════════════════════════════════════════════
-          1. Use the video feed to reason about the status of the step.
-          2. The status should go from "todo" to "inprogress" to "done" based on the video input. Usually you should not skip the "inprogress" status, but if you do ensure i.e. you are 100% sure that the step is completed from the video stream.
-          3. Only return status: "done" if from the video you identify the step was done and has been completed.   
-          ════════════════════════════════════════════════════════════
-          JSON RESPONSE FORMAT (Always—no extra text!)
-          ════════════════════════════════════════════════════════════
-          {
-            "currentStepExplanation": <explanation of whether the current step was completed based on the video> 
-            "steps": {
-              "step1": { "text": "<short label>", "status": "todo"},
-              "step2": { "text": "<short label>", "status": "todo"},
-              …
-            },
-            "currentStep": "step1" | "step2" | …  // the first step marked "todo" or "inprogress"
-            "currentStepDetailedDescription": "<detailed instructions for currentStep>",
-            "chatResponse": "<friendly sentence to the user>"
-          }
-
-          • Initialize **every** \`status\` to \`"todo"\`.  
-          • \`currentStepDetailedDescription\` is your actionable guidance.  
-          • \`chatResponse\` is short and conversational ("Great—tell me when you're done!").
-
-
-          ════════════════════════════════════════════════════════════
-          EXAMPLES (Do NOT output these—just guidance for you)
-          ════════════════════════════════════════════════════════════
-
-          User: "Can you repeat that?" → Do not call; re-explain.
-
-          User: "Next!" → Ensure step is completed first, by using the video, do not rely on the user's words.
-
-          ════════════════════════════════════════════════════════════
-          Remember: after confirmation, **only** emit the JSON object on each turn —
-          never plain text outside it.
+                You are a hands-on assistant that helps users complete real-world, physical tasks (e.g., espresso brewing, furniture assembly, bike repair, lab protocols). 
+                When a new task is requested: 
+                (1) Break it into small, atomic steps ("step1", "step2", …). Be thorough and avoid bundling actions. 
+                (2) Set all statuses to "todo". 
+                (3) Output only the JSON format below. 
+                (4) Wait for the user to say "yes" to confirm before proceeding. 
+                
+                While a task is in progress: Use the video feed to track step completion. 
+                A step should go from "todo" → "inprogress" → "done", based solely on visual evidence—not user input. Skip "inprogress" only if completion is visually obvious. 
+                For each response, return: 
+                (a) steps: All steps and statuses, 
+                (b) currentStep: First step with status "todo" or "inprogress", 
+                (c) currentStepDetailedDescription: Actionable guidance for that step,
+                (d) currentStepExplanation: How the video confirms the current status ENSURE THIS IS ACCURATE AND CONSISTENT WITH THE VIDEO, while deciding the status of the step your goal is to avoid false positives at all costs,
+                (e) chatResponse: a friendly response that would be an appropriate response to the user's actions, remember this will be spoken aloud, try to refer to the video feed as much as possible, use the objects in the video feed to guide the user through the steps
+                
+                Output only the JSON object—never plain text.
+                JSON response format (always output, no extra text):
+                {
+                "steps": {
+                    "step1": { "text": "<label>", "status": "todo" },
+                    "step2": { "text": "<label>", "status": "todo" }
+                },
+                "currentStep": "step1",
+                "currentStepDetailedDescription": "<detailed instructions>",
+                "currentStepExplanation": "<based on video explain why you chose the status>",
+                "chatResponse": "<response  which will be spoken aloud to the user>"
+                }
+                Example task (do not output—internal guidance): Making a latte → step1: "Fill portafilter", step2: "Tamp grounds", step3: "Start espresso shot", step4: "Steam milk", step5: "Pour milk into espresso". On "Next!", do not advance unless step is visually marked "done". Re-explain if asked. Never output anything except the JSON.
           `
           }
         ]
@@ -165,6 +151,30 @@ function ExpressoComponent() {
       ],
     });
   }, [setConfig]);
+  
+  // Function to send the status update request (after verification)
+  const requestStatusUpdate = useCallback(() => {
+    try {
+      // Create status update message with current state
+      let statusUpdateMessage = "Status update: Now that you've confirmed there is visible progress, please update the JSON with the appropriate status changes. Here's the current state:";
+      
+      // Include the most recent JSON to maintain continuity
+      if (latestResponse) {
+        statusUpdateMessage += "\n```json\n" + 
+          JSON.stringify(latestResponse, null, 2) + 
+          "\n```\nPlease update this JSON structure to reflect the progress visible in the video feed.";
+      }
+      
+      // Send a status update message
+      client.send({
+        text: statusUpdateMessage
+      }, true);
+      
+      console.log("Requesting status update...");
+    } catch (error) {
+      console.error("Error during status update request:", error);
+    }
+  }, [client, latestResponse]);
 
   useEffect(() => {
     const onToolCall = (toolCall: ToolCall) => {
@@ -188,9 +198,12 @@ function ExpressoComponent() {
             if (nextIncompleteStep) {
               updatedResponse.currentStep = nextIncompleteStep;
               updatedResponse.currentStepDetailedDescription = 
-                `Let's move on to ${updatedResponse.steps[nextIncompleteStep].text}. ${updatedResponse.currentStepDetailedDescription}`;
+                `Let's move on to ${updatedResponse.steps[nextIncompleteStep].text}. ${updatedResponse.currentStepDetailedDescription || ""}`;
               updatedResponse.chatResponse = `Great! You've completed ${updatedResponse.steps[stepId].text}. Now let's move on to ${updatedResponse.steps[nextIncompleteStep].text}.`;
             } else {
+              // All steps are complete, set currentStep to null
+              updatedResponse.currentStep = null;
+              updatedResponse.currentStepDetailedDescription = null;
               updatedResponse.chatResponse = `Excellent! You've completed all the steps. Is there anything else you'd like help with?`;
             }
             
@@ -226,27 +239,80 @@ function ExpressoComponent() {
         if (textParts.length > 0) {
           const newText = textParts.map(part => part.text).join("\n");
           
-          // Ignore status check responses to avoid UI disruption
-          if (newText.includes("_status_check_")) {
-            console.log("Ignoring status check response");
-            return;
+          // Handle verification response (Yes/No)
+          if (isVerifyingChange) {
+            setIsVerifyingChange(false);
+            
+            // Check for simple "yes" or "no" answers for the verification step
+            const responseText = newText.trim().toLowerCase();
+            
+            // Always update raw text to show the verification response
+            setLatestRawText(newText);
+            
+            if (responseText.includes('yes')) {
+              console.log("Change verified, sending status update request");
+              // If change is verified, proceed with status update
+              requestStatusUpdate();
+              return;
+            } else {
+              console.log("No change detected, skipping status update");
+              // If no change, don't do anything further
+              return;
+            }
           }
           
+          // Check if this is a status check response
+          const isStatusCheck = newText.includes("Status check:");
+          
+          // Always update the raw text for any response to ensure the UI always updates
           setLatestRawText(newText);
+          
           try {
             // Try to parse the JSON response
             // Remove backticks and language markers that might be in the response
             const cleanedText = newText.replace(/```json|```/g, '').trim();
-            const parsedJson: ResponseJson = JSON.parse(cleanedText);
             
-            // Add chatResponse if it doesn't exist (for backward compatibility)
-            if (!parsedJson.chatResponse) {
-              parsedJson.chatResponse = `I'll help you with ${parsedJson.steps[parsedJson.currentStep].text}.`;
+            try {
+              const parsedJson = JSON.parse(cleanedText);
+              
+              // Validate the JSON has the expected structure before updating state
+              if (parsedJson && 
+                  typeof parsedJson === 'object' && 
+                  parsedJson.steps && 
+                  typeof parsedJson.chatResponse === 'string') {
+                
+                console.log("Updating UI with valid JSON response:", parsedJson);
+                
+                // Use a functional state update to ensure we're always using the latest state
+                setLatestResponse(currentResponse => {
+                  // If new response has fewer steps than current response, it might be incomplete
+                  // Only update if this response has at least as many steps as the current one
+                  if (currentResponse && 
+                      Object.keys(parsedJson.steps).length < Object.keys(currentResponse.steps).length && 
+                      !isStatusCheck) {
+                    console.log("Received potentially partial response, keeping current state");
+                    return currentResponse;
+                  }
+                  
+                  return parsedJson;
+                });
+              } else {
+                console.error("JSON response missing required fields:", parsedJson);
+                // Still show raw text since JSON validation failed
+                setLatestRawText(`Received malformed response: ${newText}`);
+              }
+            } catch (error) {
+              console.error("Error parsing JSON response:", error);
+              
+              // Always show the raw text even for status checks if parsing failed
+              // This ensures users always see something even if parsing fails
+              setLatestRawText(newText);
             }
-            
-            setLatestResponse(parsedJson);
           } catch (error) {
-            console.error("Error parsing JSON response:", error);
+            console.error("Error processing response:", error);
+            
+            // Always show errors in the UI
+            setLatestRawText(`Error processing response: ${error instanceof Error ? error.message : String(error)}\n\n${newText}`);
           }
         }
       }
@@ -268,9 +334,9 @@ function ExpressoComponent() {
       client.off("content", onContent);
       client.off("open", onConnect);
     };
-  }, [client, latestResponse]);
+  }, [client, requestStatusUpdate, isVerifyingChange]);
   
-  // Add the polling function
+  // Add the two-stage polling function
   const pollForUpdates = useCallback(() => {
     if (!client) return;
     
@@ -278,9 +344,11 @@ function ExpressoComponent() {
     // 1. Currently polling
     // 2. No active conversation yet
     // 3. Last poll was less than 1 second ago (debounce)
+    // 4. Currently in verification stage
     if (isPolling || 
         (!latestResponse && !latestRawText) || 
-        (Date.now() - lastPollTimeRef.current < 1000)) {
+        (Date.now() - lastPollTimeRef.current < 1000) ||
+        isVerifyingChange) {
       return;
     }
     
@@ -288,22 +356,35 @@ function ExpressoComponent() {
       setIsPolling(true);
       lastPollTimeRef.current = Date.now();
       
-      // Send a lightweight status check message
-      client.send({
-        text: "_status_check_"
-      }, false); // Set turnComplete to false to avoid creating a new turn
+      // First stage: Ask for yes/no verification
+      setIsVerifyingChange(true);
       
-      console.log("Polling for updates...");
+      const verificationMessage = `Status check: Has there been any visible change or progress on the current step since the last update of step status? 
+        Answer based on the video feed, do not trust user input other than video stream or make any assumptions. Please answer with ONLY 'yes' or 'no'
+        Decide this based on the following criteria:
+        - Is the object reffered to in the current step detailed description visible in the video feed?
+        - Is the object being used in the step as mentioned in the current step detailed description?
+        - Is the object being manipulated in the step as mentioned in the current step detailed description?`;
+
+      client.send({
+        text: verificationMessage
+      }, true);
+      
+      console.log("Polling for changes...");
       
       // Reset polling state after a timeout (in case we don't get a response)
       setTimeout(() => {
         setIsPolling(false);
+        if (isVerifyingChange) {
+          setIsVerifyingChange(false); // Reset verification state if timed out
+        }
       }, 3000);
     } catch (error) {
       console.error("Error during status poll:", error);
       setIsPolling(false);
+      setIsVerifyingChange(false);
     }
-  }, [client, latestResponse, latestRawText, isPolling]);
+  }, [client, latestResponse, latestRawText, isPolling, isVerifyingChange]);
 
   // Setup polling interval
   useEffect(() => {
@@ -457,9 +538,10 @@ function ExpressoComponent() {
               fontWeight: 500,
               display: "flex",
               alignItems: "center",
+              gap: "4px",
               opacity: isPolling ? 0.7 : 1
             }}
-            title="Refresh now"
+            title="Check for updates now"
           >
             <span className="material-symbols-outlined" style={{ 
               fontSize: "16px",
@@ -467,6 +549,7 @@ function ExpressoComponent() {
             }}>
               {isPolling ? "sync" : "refresh"}
             </span>
+            Check Now
           </button>
           
           {/* Add polling toggle button */}
@@ -490,29 +573,15 @@ function ExpressoComponent() {
               fontSize: "13px",
               fontWeight: 500,
               display: "flex",
-              alignItems: "center"
+              alignItems: "center",
+              gap: "4px"
             }}
-            title={isPollingEnabled ? "Disable auto-refresh" : "Enable auto-refresh"}
+            title={isPollingEnabled ? "Disable automatic checking" : "Enable automatic checking"}
           >
-            <span className="material-symbols-outlined" style={{ fontSize: "16px", marginRight: "4px" }}>
+            <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
               {isPollingEnabled ? "sync" : "sync_disabled"}
             </span>
-            {isPollingEnabled ? "Live" : "Manual"}
-          </button>
-          <button 
-            onClick={handleClearConversation} 
-            style={{
-              backgroundColor: colors.primary,
-              color: colors.background,
-              border: "none",
-              borderRadius: "4px",
-              padding: "6px 12px",
-              cursor: "pointer",
-              fontSize: "13px",
-              fontWeight: 500
-            }}
-          >
-            Reset
+            {isPollingEnabled ? "Auto Check" : "Auto Off"}
           </button>
         </div>
       </div>
@@ -682,70 +751,100 @@ function ExpressoComponent() {
               padding: "12px",
               border: `1px solid ${colors.border}`
             }}>
-              <h3 style={{ 
-                margin: "0 0 8px 0", 
-                fontSize: "14px", 
-                color: colors.primary,
-                fontWeight: 500
-              }}>
-                {latestResponse.steps[latestResponse.currentStep]?.text}
-              </h3>
-              <p style={{ 
-                margin: 0, 
-                fontSize: "14px",
-                lineHeight: 1.5,
-                color: colors.onBackground
-              }}>
-                {latestResponse.currentStepDetailedDescription}
-              </p>
-              
-              {latestResponse.steps[latestResponse.currentStep]?.status !== "done" && (
-                <div style={{ 
-                  display: "flex", 
-                  gap: "8px", 
-                  marginTop: "12px" 
-                }}>
-                  {latestResponse.steps[latestResponse.currentStep]?.status === "todo" && (
-                    <button
-                      onClick={() => handleMarkStepInProgress(latestResponse.currentStep)}
-                      style={{
-                        backgroundColor: colors.primaryDark,
-                        color: colors.background,
-                        border: `1px solid ${colors.primary}`,
-                        borderRadius: "4px",
-                        padding: "6px 12px",
-                        cursor: "pointer",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        display: "flex",
-                        alignItems: "center"
-                      }}
-                    >
-                      <span style={{ marginRight: "4px" }}>Mark as in progress</span>
-                      <span style={{ fontSize: "18px"}}>•</span>
-                    </button>
-                  )}
+              {latestResponse.currentStep ? (
+                <>
+                  <h3 style={{ 
+                    margin: "0 0 8px 0", 
+                    fontSize: "14px", 
+                    color: colors.primary,
+                    fontWeight: 500
+                  }}>
+                    {latestResponse.steps[latestResponse.currentStep]?.text}
+                  </h3>
+                  <p style={{ 
+                    margin: 0, 
+                    fontSize: "14px",
+                    lineHeight: 1.5,
+                    color: colors.onBackground
+                  }}>
+                    {latestResponse.currentStepDetailedDescription}
+                  </p>
                   
-                  {latestResponse.steps[latestResponse.currentStep]?.status === "inprogress" && (
-                    <button
-                      onClick={() => handleMarkStepComplete(latestResponse.currentStep)}
-                      style={{
-                        backgroundColor: colors.primary,
-                        color: colors.background,
-                        border: "none",
-                        borderRadius: "4px",
-                        padding: "6px 12px",
-                        cursor: "pointer",
-                        fontSize: "13px",
-                        fontWeight: 500,
-                        display: "flex",
-                        alignItems: "center"
-                      }}
-                    >
-                      <span style={{ marginRight: "4px" }}>Completed</span>
-                      <span style={{ fontSize: "18px" }}>✓</span>
-                    </button>
+                  {latestResponse.currentStep && latestResponse.steps[latestResponse.currentStep]?.status !== "done" && (
+                    <div style={{ 
+                      display: "flex", 
+                      gap: "8px", 
+                      marginTop: "12px" 
+                    }}>
+                      {latestResponse.steps[latestResponse.currentStep]?.status === "todo" && (
+                        <button
+                          onClick={() => latestResponse.currentStep && handleMarkStepInProgress(latestResponse.currentStep)}
+                          style={{
+                            backgroundColor: colors.primaryDark,
+                            color: colors.background,
+                            border: `1px solid ${colors.primary}`,
+                            borderRadius: "4px",
+                            padding: "6px 12px",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            display: "flex",
+                            alignItems: "center"
+                          }}
+                        >
+                          <span style={{ marginRight: "4px" }}>Mark as in progress</span>
+                          <span style={{ fontSize: "18px"}}>•</span>
+                        </button>
+                      )}
+                      
+                      {latestResponse.steps[latestResponse.currentStep]?.status === "inprogress" && (
+                        <button
+                          onClick={() => latestResponse.currentStep && handleMarkStepComplete(latestResponse.currentStep)}
+                          style={{
+                            backgroundColor: colors.primary,
+                            color: colors.background,
+                            border: "none",
+                            borderRadius: "4px",
+                            padding: "6px 12px",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: 500,
+                            display: "flex",
+                            alignItems: "center"
+                          }}
+                        >
+                          <span style={{ marginRight: "4px" }}>Completed</span>
+                          <span style={{ fontSize: "18px" }}>✓</span>
+                        </button>
+                      )}
+                    </div>
                   )}
+                </>
+              ) : (
+                // Show completion message when all steps are done
+                <div style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "16px 0",
+                  textAlign: "center"
+                }}>
+                  <span style={{ 
+                    fontSize: "32px", 
+                    marginBottom: "8px",
+                    color: colors.success
+                  }}>
+                    ✓
+                  </span>
+                  <h3 style={{ 
+                    margin: "0 0 8px 0", 
+                    fontSize: "16px", 
+                    color: colors.success,
+                    fontWeight: 500
+                  }}>
+                    All steps completed!
+                  </h3>
                 </div>
               )}
             </div>
