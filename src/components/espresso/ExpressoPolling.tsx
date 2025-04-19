@@ -334,7 +334,7 @@ function ExpressoComponent() {
       client.off("content", onContent);
       client.off("open", onConnect);
     };
-  }, [client, requestStatusUpdate, isVerifyingChange]);
+  }, [client]);
   
   // Add the two-stage polling function
   const pollForUpdates = useCallback(() => {
