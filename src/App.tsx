@@ -24,8 +24,8 @@ import AudioStreamDebug from "./AudioStreamDebug";
 import VolumeControl from "./components/volume-control/VolumeControl";
 import { AudioRecorder } from "./lib/audio-recorder";
 import cn from "classnames";
-// import { Expresso } from "./components/espresso/Expresso";
-import { Expresso } from "./components/espresso/ExpressoPolling";
+import { Expresso } from "./components/espresso/Expresso";
+// import { Expresso } from "./components/espresso/ExpressoPolling";
 
 const API_KEY = process.env.REACT_APP_GEMINI_API_KEY as string;
 if (typeof API_KEY !== "string") {
