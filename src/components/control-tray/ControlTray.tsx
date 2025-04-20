@@ -26,6 +26,7 @@ import { AudioRecorder } from "../../lib/audio-recorder";
 import AudioPulse from "../audio-pulse/AudioPulse";
 import SettingsPanel, { VideoSource } from "../settings-panel/SettingsPanel";
 import "./control-tray.scss";
+import { usePolling } from "../../contexts/PollingContext";
 
 export type ControlTrayProps = {
   videoRef: RefObject<HTMLVideoElement>;
@@ -84,6 +85,8 @@ function ControlTray({
   // Settings state
   const [showSettings, setShowSettings] = useState(false);
   const [activeVideoSource, setActiveVideoSource] = useState<VideoSource | null>(null);
+  // Use polling context instead of local state
+  const { pollingInterval, isPollingEnabled, setPollingInterval, setIsPollingEnabled } = usePolling();
 
   const { client, connected, connect, disconnect, volume } =
     useLiveAPIContext();
@@ -378,6 +381,10 @@ function ControlTray({
         onClose={() => setShowSettings(false)}
         activeVideoSource={activeVideoSource}
         onVideoSourceChange={handleVideoSourceChange}
+        pollingInterval={pollingInterval}
+        onPollingIntervalChange={setPollingInterval}
+        isPollingEnabled={isPollingEnabled}
+        onPollingEnabledChange={setIsPollingEnabled}
       />
     </>
   );

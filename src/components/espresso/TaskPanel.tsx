@@ -48,11 +48,17 @@ export const colors = {
 interface TaskPanelProps {
   latestResponse: ResponseJson | null;
   latestRawText: string;
+  isPolling: boolean;
+  isPollingEnabled: boolean;
+  onTogglePolling: () => void;
 }
 
 function TaskPanelComponent({
   latestResponse,
-  latestRawText
+  latestRawText,
+  isPolling,
+  isPollingEnabled,
+  onTogglePolling
 }: TaskPanelProps) {
   const [isExplanationExpanded, setIsExplanationExpanded] = useState<boolean>(true);
 
@@ -81,6 +87,38 @@ function TaskPanelComponent({
         padding: "12px 16px"
       }}>
         <h2 style={{ margin: 0, fontWeight: 500, fontSize: "18px", color: colors.onBackground }}>Task Assistant</h2>
+        <div 
+          onClick={onTogglePolling}
+          style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            color: isPolling ? colors.primary : 'rgba(170, 170, 170, 0.6)',
+            cursor: "pointer",
+            padding: "4px 8px",
+            borderRadius: "12px",
+            transition: "background-color 0.2s ease",
+            position: "relative"
+          }}
+          title={isPollingEnabled ? "Turn polling off" : "Turn polling on"}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <path 
+              fill="currentColor" 
+              d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" 
+            />
+          </svg>
+          {!isPollingEnabled && (
+            <div style={{
+              position: "absolute",
+              width: "2px",
+              height: "24px",
+              backgroundColor: 'rgba(170, 170, 170, 0.6)',
+              transform: "rotate(45deg)",
+              left: "50%",
+              top: "7%"
+            }} />
+          )}
+        </div>
       </div>
       
       {latestResponse ? (

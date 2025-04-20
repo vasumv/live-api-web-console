@@ -25,6 +25,10 @@ export type SettingsPanelProps = {
   onClose: () => void;
   activeVideoSource: VideoSource | null;
   onVideoSourceChange: (source: VideoSource) => void;
+  pollingInterval: number;
+  onPollingIntervalChange: (interval: number) => void;
+  isPollingEnabled: boolean;
+  onPollingEnabledChange: (enabled: boolean) => void;
 };
 
 function SettingsPanel({
@@ -32,6 +36,10 @@ function SettingsPanel({
   onClose,
   activeVideoSource,
   onVideoSourceChange,
+  pollingInterval,
+  onPollingIntervalChange,
+  isPollingEnabled,
+  onPollingEnabledChange
 }: SettingsPanelProps) {
   // Close on escape key
   const handleKeyDown = useCallback(
@@ -68,7 +76,9 @@ function SettingsPanel({
         <div className="settings-header">
           <h2>Settings</h2>
           <button className="close-button" onClick={onClose} aria-label="Close settings">
-            <span className="material-symbols-outlined">close</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
           </button>
         </div>
         <div className="settings-content">
@@ -85,6 +95,36 @@ function SettingsPanel({
               <option value="webcam">Device Camera Feed</option>
               <option value="whep">Neckband Camera Feed</option>
             </select>
+          </div>
+          
+          <div className="setting-group">
+            <div className="setting-row">
+              <label htmlFor="polling-enabled" className="row-label">Auto-check status updates:</label>
+              <input
+                id="polling-enabled"
+                type="checkbox"
+                checked={isPollingEnabled}
+                onChange={(e) => onPollingEnabledChange(e.target.checked)}
+              />
+            </div>
+            
+            <div style={{ 
+              opacity: isPollingEnabled ? 1 : 0.5, 
+              pointerEvents: isPollingEnabled ? "auto" : "none",
+              marginTop: "20px"
+            }}>
+              <label htmlFor="polling-interval">Check interval (seconds):</label>
+              <input
+                id="polling-interval"
+                type="number"
+                min="1"
+                max="60"
+                style={{ width: "100px" }}
+                value={pollingInterval}
+                onChange={(e) => onPollingIntervalChange(Number(e.target.value))}
+                disabled={!isPollingEnabled}
+              />
+            </div>
           </div>
         </div>
       </div>
