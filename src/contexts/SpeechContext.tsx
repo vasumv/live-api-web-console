@@ -152,7 +152,7 @@ export const SpeechProvider: FC<SpeechProviderProps> = ({ children, apiKey }) =>
     
     if (nextText) {
       setSpeaking(true);
-      client.send([{ text: nextText }], true);
+      client.send([{ text: "Repeat the following: \n" + nextText }], true);
     } else {
       processingRef.current = false;
     }
