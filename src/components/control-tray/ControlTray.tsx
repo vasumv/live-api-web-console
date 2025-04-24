@@ -21,9 +21,12 @@ import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import { UseMediaStreamResult } from "../../hooks/use-media-stream-mux";
 import { useScreenCapture } from "../../hooks/use-screen-capture";
 import { useWhepStream } from "../../hooks/use-whep-stream";
+import { useWebcam } from "../../hooks/use-webcam";
 import { AudioRecorder } from "../../lib/audio-recorder";
 import AudioPulse from "../audio-pulse/AudioPulse";
+import SettingsPanel, { VideoSource } from "../settings-panel/SettingsPanel";
 import "./control-tray.scss";
+import { usePolling } from "../../contexts/PollingContext";
 
 export type ControlTrayProps = {
   videoRef: RefObject<HTMLVideoElement>;
@@ -64,10 +67,13 @@ function ControlTray({
   supportsVideo,
   audioRecorder: providedAudioRecorder = null,
 }: ControlTrayProps) {
-  const videoStreams = [useWhepStream(), useScreenCapture()];
+  // Initialize the video streams
+  const whepStream = useWhepStream();
+  const webcam = useWebcam();
+  const screenCapture = useScreenCapture();
+  const videoStreams = [whepStream, webcam, screenCapture];
   const [activeVideoStream, setActiveVideoStream] =
     useState<MediaStream | null>(null);
-  const [whepStream, screenCapture] = videoStreams;
   const [inVolume, setInVolume] = useState(0);
   // Use provided audioRecorder or create a new one if not provided
   const [audioRecorder] = useState(() => providedAudioRecorder || new AudioRecorder());
@@ -75,6 +81,12 @@ function ControlTray({
   const renderCanvasRef = useRef<HTMLCanvasElement>(null);
   const connectButtonRef = useRef<HTMLButtonElement>(null);
   const audioStartedRef = useRef<boolean>(false);
+  
+  // Settings state
+  const [showSettings, setShowSettings] = useState(false);
+  const [activeVideoSource, setActiveVideoSource] = useState<VideoSource | null>(null);
+  // Use polling context instead of local state
+  const { pollingInterval, isPollingEnabled, setPollingInterval, setIsPollingEnabled } = usePolling();
 
   const { client, connected, connect, disconnect, volume } =
     useLiveAPIContext();
@@ -109,6 +121,7 @@ function ControlTray({
         ]);
       }
     };
+    
     
     const startAudioRecording = async () => {
       if (connected && !muted && audioRecorder) {
@@ -236,6 +249,14 @@ function ControlTray({
         
         setActiveVideoStream(mediaStream);
         onVideoStreamChange(mediaStream);
+        if (next.type === "webcam") {
+          setActiveVideoSource("webcam");
+        } else if (next.type === "whep") {
+          setActiveVideoSource("whep");
+        } else {
+          setActiveVideoSource(null);
+        }
+      
         
         // Start audio recorder after setting the new stream
         if (connected && !muted) {
@@ -251,6 +272,7 @@ function ControlTray({
       } else {
         setActiveVideoStream(null);
         onVideoStreamChange(null);
+        setActiveVideoSource(null);
       }
 
       videoStreams.filter((msr) => msr !== next).forEach((msr) => msr.stop());
@@ -259,94 +281,112 @@ function ControlTray({
     }
   };
 
+  // Handle video source selection from settings panel
+  const handleVideoSourceChange = (source: VideoSource) => {
+    if (source === "webcam") {
+      changeStreams(webcam)();
+    } else if (source === "whep") {
+      changeStreams(whepStream)();
+    }
+    
+    // Keep settings open
+  };
+
+  // Toggle settings panel
+  const toggleSettingsPanel = () => {
+    setShowSettings(!showSettings);
+  };
+
   return (
-    <section className="control-tray">
-      <canvas style={{ display: "none" }} ref={renderCanvasRef} />
-      <nav className={cn("actions-nav", { disabled: !connected })}>
-        <button
-          className={cn("action-button mic-button")}
-          onClick={() => {
-            setMuted(!muted);
-            if (muted && connected && activeVideoStream) {
-              // If unmuting, restart audio recorder
-              setTimeout(() => {
-                if (audioStartedRef.current) {
-                  audioRecorder.stop();
-                }
-                audioStartedRef.current = false;
-                audioRecorder.start(activeVideoStream);
-                audioStartedRef.current = true;
-              }, 100);
-            }
-          }}
-        >
-          {!muted ? (
-            <span className="material-symbols-outlined filled">mic</span>
-          ) : (
-            <span className="material-symbols-outlined filled">mic_off</span>
-          )}
-        </button>
-
-        <div className="action-button no-action outlined">
-          <AudioPulse volume={volume} active={connected} hover={false} />
-        </div>
-
-        {supportsVideo && (
-          <>
-            <MediaStreamButton
-              isStreaming={screenCapture.isStreaming}
-              start={changeStreams(screenCapture)}
-              stop={changeStreams()}
-              onIcon="cancel_presentation"
-              offIcon="present_to_all"
-            />
-            <MediaStreamButton
-              isStreaming={whepStream.isStreaming}
-              start={changeStreams(whepStream)}
-              stop={changeStreams()}
-              onIcon="videocam_off"
-              offIcon="videocam"
-            />
-          </>
-        )}
-        {children}
-      </nav>
-
-      <div className={cn("connection-container", { connected })}>
-        <div className="connection-button-container">
+    <>
+      <section className="control-tray">
+        <canvas style={{ display: "none" }} ref={renderCanvasRef} />
+        <nav className={cn("actions-nav", { disabled: !connected })}>
           <button
-            ref={connectButtonRef}
-            className={cn("action-button connect-toggle", { connected })}
-            onClick={async () => {
-              if (connected) {
-                // If connected, disconnect
-                disconnect();
-                if (audioStartedRef.current) {
-                  audioRecorder.stop();
-                  audioStartedRef.current = false;
-                }
-              } else {
-                // If not connected, connect to API and start WHEP stream
-                try {
-                  await connect();
-                  // Auto-start the WHEP stream if not already streaming
-                  if (!whepStream.isStreaming && !activeVideoStream) {
-                    changeStreams(whepStream)();
-                  }
-                } catch (err) {
-                  console.error("Failed to connect:", err);
-                }
-              }
-            }}
+            className={cn("action-button mic-button")}
+            onClick={() => setMuted(!muted)}
           >
-            <span className="material-symbols-outlined filled">
-              {connected ? "pause" : "play_arrow"}
-            </span>
+            {!muted ? (
+              <span className="material-symbols-outlined filled">mic</span>
+            ) : (
+              <span className="material-symbols-outlined filled">mic_off</span>
+            )}
           </button>
+
+          <div className="action-button no-action outlined">
+            <AudioPulse volume={volume} active={connected} hover={false} />
+          </div>
+
+          {supportsVideo && (
+            <>
+              <MediaStreamButton
+                isStreaming={screenCapture.isStreaming}
+                start={changeStreams(screenCapture)}
+                stop={changeStreams()}
+                onIcon="cancel_presentation"
+                offIcon="present_to_all"
+              />
+              <MediaStreamButton
+                isStreaming={whepStream.isStreaming || webcam.isStreaming}
+                start={changeStreams(activeVideoSource === "webcam" ? webcam : whepStream)}
+                stop={changeStreams()}
+                onIcon="videocam_off"
+                offIcon="videocam"
+              />
+              <button
+                className="action-button settings-button"
+                onClick={toggleSettingsPanel}
+                aria-label="Settings"
+              >
+                <span className="material-symbols-outlined">settings</span>
+              </button>
+            </>
+          )}
+          {children}
+        </nav>
+
+        <div className={cn("connection-container", { connected })}>
+          <div className="connection-button-container">
+            <button
+              ref={connectButtonRef}
+              className={cn("action-button connect-toggle", { connected })}
+              onClick={async () => {
+                if (connected) {
+                  disconnect();
+                } else {
+                  try {
+                    await connect();
+                    
+                    // Auto-start the WHEP stream if not already streaming
+                    if (!whepStream.isStreaming && !webcam.isStreaming && !activeVideoStream) {
+                      changeStreams(whepStream)();
+                    }
+                  } catch (err) {
+                    console.error("Failed to connect:", err);
+                  }
+                }
+              }}
+            >
+              <span className="material-symbols-outlined filled">
+                {connected ? "pause" : "play_arrow"}
+              </span>
+            </button>
+          </div>
+          <span className="text-indicator">Streaming</span>
         </div>
-        <span className="text-indicator">Streaming</span>
-      </div>
-    </section>
+      </section>
+
+      <SettingsPanel
+        isVisible={showSettings}
+        onClose={() => setShowSettings(false)}
+        activeVideoSource={activeVideoSource}
+        onVideoSourceChange={handleVideoSourceChange}
+        pollingInterval={pollingInterval}
+        onPollingIntervalChange={setPollingInterval}
+        isPollingEnabled={isPollingEnabled}
+        onPollingEnabledChange={setIsPollingEnabled}
+      />
+    </>
   );
 }
 

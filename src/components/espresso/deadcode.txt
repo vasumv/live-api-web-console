@@ -1,0 +1,84 @@
+const declaration: FunctionDeclaration = {
+    name: "update_task_progress",
+    description: `
+  This function is used to Updates the completion status of a task step. If you have determined
+  that the user has completed a step, call this function with the value \`done\` for \`status\`,
+  along with an explanation of what was completed for \`explanation\`. If you have determined 
+  that the user has not finished the step, call this function with the value \`inprogress\` and an 
+  explanation.
+  
+  **→ CRITICAL RULE - CALL THIS FUNCTION ONLY WHEN THE USER'S EXACT WORDS CLEARLY SIGNAL COMPLETION.**  
+  A call is allowed *only* if the entire user utterance (case-insensitive) contains **one** of the exact phrases below
+  —or an equivalent that explicitly names the step (e.g. "step 2 done"):
+  
+    • "done"              • "i am done"           • "i'm done"
+    • "finished"          • "i am finished"       • "i'm finished"
+    • "completed"         • "i have completed…"   • "i've completed…"  
+    • "step <n> done"
+  
+  If you are even slightly unsure, **do not call** this function; instead reply with \`chatResponse\`
+  and keep the same \`currentStep\`.`,
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        stepId: {
+          type: SchemaType.STRING,
+          description: "The ID of the step to update (e.g., 'step1', 'step2')",
+        },
+        status: {
+          type: SchemaType.STRING,
+          description: "The status of the step",
+        },
+      },
+      required: ["stepId", "status"],
+    },
+  };
+
+
+  useEffect(() => {
+    
+    const onContent = (content: ServerContent) => {
+      console.log("Received content:", content);
+      // Extract text from content if it's a ModelTurn
+      if (isModelTurn(content) && content.modelTurn && content.modelTurn.parts) {
+        const textParts = content.modelTurn.parts.filter(part => part.text);
+        if (textParts.length > 0) {
+          const newText = textParts.map(part => part.text).join("\n");
+          setLatestRawText(newText);
+          try {
+            // Try to parse the JSON response
+            // Remove backticks and language markers that might be in the response
+            const cleanedText = newText.replace(/```json|```/g, '').trim();
+            const parsedJson: ResponseJson = JSON.parse(cleanedText);
+            
+            // Add chatResponse if it doesn't exist (for backward compatibility)
+            if (!parsedJson.chatResponse) {
+              parsedJson.chatResponse = `I'll help you with ${parsedJson.steps[parsedJson.currentStep].text}.`;
+            }
+            
+            setLatestResponse(parsedJson);
+          } catch (error) {
+            console.error("Error parsing JSON response:", error);
+          }
+        }
+      }
+    };
+    
+    const onConnect = () => {
+      console.log("Connected to API");
+      // Reset responses on new connection
+      setLatestResponse(null);
+      setLatestRawText("");
+    };
+    
+    client.on("toolcall", onToolCall);
+    client.on("content", onContent);
+    client.on("open", onConnect);
+    
+    return () => {
+      client.off("toolcall", onToolCall);
+      client.off("content", onContent);
+      client.off("open", onConnect);
+    };
+  }, [client, latestResponse]);
+

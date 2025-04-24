@@ -1,0 +1,207 @@
+.settings-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  background: var(--Neutral-5, #202124);
+  border: 1px solid var(--Neutral-30, #35363a);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  overflow: hidden;
+  color: var(--Neutral-80, #e8eaed);
+  animation: fadeIn 0.2s ease;
+
+  .settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--Neutral-20, rgba(232, 234, 237, 0.12));
+    background-color: var(--Neutral-10, #2a2b2e);
+
+    h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+      color: var(--Neutral-90, #e8eaed);
+    }
+
+    .close-button {
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--Neutral-60, #9aa0a6);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 50%;
+      
+      &:hover {
+        background-color: var(--Neutral-20, rgba(232, 234, 237, 0.12));
+        color: var(--Neutral-90, #e8eaed);
+      }
+    }
+  }
+
+  .settings-content {
+    padding: 20px;
+
+    .setting-group {
+      margin-bottom: 24px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .setting-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        
+        .row-label {
+          margin: 0;
+          font-weight: 400;
+          font-size: 16px;
+          color: var(--Neutral-70, #e8eaed);
+        }
+      }
+
+      label {
+        display: block;
+        margin-bottom: 12px;
+        font-weight: 400;
+        font-size: 16px;
+        color: var(--Neutral-70, #e8eaed);
+      }
+
+      select, input[type="number"] {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid var(--Neutral-30, #35363a);
+        border-radius: 8px;
+        background-color: var(--Neutral-5, #202124);
+        font-size: 16px;
+        color: var(--Neutral-90, #e8eaed);
+        
+        &:focus {
+          outline: none;
+          border-color: var(--Blue-500, #8ab4f8);
+          box-shadow: 0 0 0 2px rgba(138, 180, 248, 0.2);
+        }
+        
+        &:hover:not(:disabled) {
+          border-color: var(--Blue-400, #8ab4f8);
+        }
+        
+        &:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+      }
+      
+      select {
+        appearance: none;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%239aa0a6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-size: 16px;
+        padding-right: 40px;
+        
+        option {
+          background-color: var(--Neutral-5, #202124);
+          color: var(--Neutral-90, #e8eaed);
+        }
+      }
+
+      input[type="number"] {
+        appearance: textfield;
+        -moz-appearance: textfield;
+        
+        &::-webkit-outer-spin-button,
+        &::-webkit-inner-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+      }
+      
+      // Toggle switch styling
+      .toggle-switch {
+        position: relative;
+        display: inline-block;
+        width: 44px;
+        height: 24px;
+        
+        input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+          
+          &:checked + label {
+            background-color: var(--Blue-500, #8ab4f8);
+            
+            &:before {
+              transform: translateX(20px);
+            }
+          }
+          
+          &:focus + label {
+            box-shadow: 0 0 1px var(--Blue-500, #8ab4f8);
+          }
+          
+          &:disabled + label {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+        }
+        
+        label {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: var(--Neutral-30, #5f6368);
+          transition: .3s;
+          border-radius: 24px;
+          
+          &:before {
+            position: absolute;
+            content: "";
+            height: 18px;
+            width: 18px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .3s;
+            border-radius: 50%;
+          }
+        }
+      }
+    }
+  }
+}
+
+.settings-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+} 
