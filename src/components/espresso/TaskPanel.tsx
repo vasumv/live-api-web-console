@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { memo, useState } from "react";
+import { useSpeech } from "../../contexts/SpeechContext";
 
 // Define the response structure based on the JSON format
 export interface StepInfo {
@@ -61,6 +62,7 @@ function TaskPanelComponent({
   onTogglePolling
 }: TaskPanelProps) {
   const [isExplanationExpanded, setIsExplanationExpanded] = useState<boolean>(true);
+  const { speaking, isSpeechEnabled, setSpeechEnabled } = useSpeech();
 
   return (
     <div className="expresso-container" style={{
@@ -87,37 +89,74 @@ function TaskPanelComponent({
         padding: "12px 16px"
       }}>
         <h2 style={{ margin: 0, fontWeight: 500, fontSize: "18px", color: colors.onBackground }}>Task Assistant</h2>
-        <div 
-          onClick={onTogglePolling}
-          style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            color: isPolling ? colors.primary : 'rgba(170, 170, 170, 0.6)',
-            cursor: "pointer",
-            padding: "4px 8px",
-            borderRadius: "12px",
-            transition: "background-color 0.2s ease",
-            position: "relative"
-          }}
-          title={isPollingEnabled ? "Turn polling off" : "Turn polling on"}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24">
-            <path 
-              fill="currentColor" 
-              d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" 
-            />
-          </svg>
-          {!isPollingEnabled && (
-            <div style={{
-              position: "absolute",
-              width: "2px",
-              height: "24px",
-              backgroundColor: 'rgba(170, 170, 170, 0.6)',
-              transform: "rotate(45deg)",
-              left: "50%",
-              top: "7%"
-            }} />
-          )}
+        <div style={{ display: "flex", gap: "12px" }}>
+          {/* Speech toggle button */}
+          <div 
+            onClick={() => setSpeechEnabled(!isSpeechEnabled)}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              color: speaking ? colors.primary : isSpeechEnabled ? 'rgba(170, 170, 170, 0.6)' : 'rgba(170, 170, 170, 0.4)',
+              cursor: "pointer",
+              padding: "4px 8px",
+              borderRadius: "12px",
+              transition: "background-color 0.2s ease",
+              position: "relative"
+            }}
+            title={isSpeechEnabled ? "Turn speech off" : "Turn speech on"}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path 
+                fill="currentColor" 
+                d="M14,3.23V5.29C16.89,6.15 19,8.83 19,12C19,15.17 16.89,17.84 14,18.7V20.77C18,19.86 21,16.28 21,12C21,7.72 18,4.14 14,3.23M16.5,12C16.5,10.23 15.5,8.71 14,7.97V16C15.5,15.29 16.5,13.76 16.5,12M3,9V15H7L12,20V4L7,9H3Z" 
+              />
+            </svg>
+            {!isSpeechEnabled && (
+              <div style={{
+                position: "absolute",
+                width: "2px",
+                height: "24px",
+                backgroundColor: 'rgba(170, 170, 170, 0.6)',
+                transform: "rotate(45deg)",
+                left: "50%",
+                top: "7%"
+              }} />
+            )}
+          </div>
+          
+          {/* Polling indicator */}
+          <div 
+            onClick={onTogglePolling}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              color: isPolling ? colors.primary : 'rgba(170, 170, 170, 0.6)',
+              cursor: "pointer",
+              padding: "4px 8px",
+              borderRadius: "12px",
+              transition: "background-color 0.2s ease",
+              position: "relative"
+            }}
+            title={isPollingEnabled ? "Turn polling off" : "Turn polling on"}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path 
+                fill="currentColor" 
+                d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" 
+              />
+            </svg>
+            {!isPollingEnabled && (
+              <div style={{
+                position: "absolute",
+                width: "2px",
+                height: "24px",
+                backgroundColor: 'rgba(170, 170, 170, 0.6)',
+                transform: "rotate(45deg)",
+                left: "50%",
+                top: "7%"
+              }} />
+            )}
+          </div>
         </div>
       </div>
       
@@ -134,8 +173,21 @@ function TaskPanelComponent({
             border: `1px solid ${colors.border}`,
             fontSize: "14px",
             lineHeight: "1.5",
-            color: colors.onBackground
+            color: colors.onBackground,
+            position: "relative"
           }}>
+            {speaking && (
+              <div style={{
+                position: "absolute",
+                top: "8px",
+                right: "8px",
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                backgroundColor: colors.primary,
+                animation: "pulse 1s infinite ease-in-out"
+              }} />
+            )}
             {latestResponse.chatResponse}
             {latestResponse.currentStepExplanation && (
               <div style={{ marginTop: "8px" }}>
@@ -321,4 +373,4 @@ function TaskPanelComponent({
   );
 }
 
-export const TaskPanel = memo(TaskPanelComponent); 
+export const TaskPanel = memo(TaskPanelComponent);
