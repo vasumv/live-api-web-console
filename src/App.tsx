@@ -18,6 +18,7 @@ import { useRef, useState } from "react";
 import "./App.scss";
 import { LiveAPIProvider } from "./contexts/LiveAPIContext";
 import { SpeechProvider } from "./contexts/SpeechContext";
+import { VisionProvider } from "./contexts/VisionContext";
 import { PollingProvider } from "./contexts/PollingContext";
 import SidePanel from "./components/side-panel/SidePanel";
 import { Altair } from "./components/altair/Altair";
@@ -52,68 +53,70 @@ function App() {
   return (
     <div className="App">
       <LiveAPIProvider url={uri} apiKey={API_KEY}>
-        <SpeechProvider apiKey={API_KEY}>
-          <PollingProvider>
-            <div className="streaming-console">
-              <SidePanel />
-              <main>
-                <div className="main-app-area">
-                  {/* APP goes here */}
-                  {/* <Altair /> */}
-                  <Expresso /> 
-                  <video
-                    className={cn("stream", {
-                      hidden: !videoRef.current || !videoStream,
-                    })}
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted={true} /* Mute the video element so we don't hear the stream audio */
-                  />
-                  
-                  {/* Audio debug overlay (conditional) */}
-                  {showAudioDebug && videoStream && (
-                    <AudioStreamDebug stream={videoStream} />
-                  )}
-                  
-                  {/* Volume control overlay (conditional) */}
-                  {showVolumeControl && (
-                    <VolumeControl audioRecorder={audioRecorder} />
-                  )}
-                </div>
+        <PollingProvider>
+          <SpeechProvider apiKey={API_KEY}>
+            <VisionProvider apiKey={API_KEY}>
+              <div className="streaming-console">
+                <SidePanel />
+                <main>
+                  <div className="main-app-area">
+                    {/* APP goes here */}
+                    {/* <Altair /> */}
+                    <Expresso /> 
+                    <video
+                      className={cn("stream", {
+                        hidden: !videoRef.current || !videoStream,
+                      })}
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted={true} /* Mute the video element so we don't hear the stream audio */
+                    />
+                    
+                    {/* Audio debug overlay (conditional) */}
+                    {showAudioDebug && videoStream && (
+                      <AudioStreamDebug stream={videoStream} />
+                    )}
+                    
+                    {/* Volume control overlay (conditional) */}
+                    {showVolumeControl && (
+                      <VolumeControl audioRecorder={audioRecorder} />
+                    )}
+                  </div>
 
-                <ControlTray
-                  videoRef={videoRef}
-                  supportsVideo={true}
-                  onVideoStreamChange={setVideoStream}
-                  audioRecorder={audioRecorder}
-                >
-                  {/* Audio debug toggle button */}
-                  <button 
-                    className="action-button"
-                    onClick={() => setShowAudioDebug(!showAudioDebug)}
-                    title={showAudioDebug ? "Hide audio debug" : "Show audio debug"}
+                  <ControlTray
+                    videoRef={videoRef}
+                    supportsVideo={true}
+                    onVideoStreamChange={setVideoStream}
+                    audioRecorder={audioRecorder}
                   >
-                    <span className="material-symbols-outlined">
-                      {showAudioDebug ? "hearing" : "hearing_disabled"}
-                    </span>
-                  </button>
-                  
-                  {/* Volume control toggle button */}
-                  <button 
-                    className="action-button"
-                    onClick={() => setShowVolumeControl(!showVolumeControl)}
-                    title={showVolumeControl ? "Hide volume control" : "Show volume control"}
-                  >
-                    <span className="material-symbols-outlined">
-                      {showVolumeControl ? "volume_up" : "volume_off"}
-                    </span>
-                  </button>
-                </ControlTray>
-              </main>
-            </div>
-          </PollingProvider>
-        </SpeechProvider>
+                    {/* Audio debug toggle button */}
+                    <button 
+                      className="action-button"
+                      onClick={() => setShowAudioDebug(!showAudioDebug)}
+                      title={showAudioDebug ? "Hide audio debug" : "Show audio debug"}
+                    >
+                      <span className="material-symbols-outlined">
+                        {showAudioDebug ? "hearing" : "hearing_disabled"}
+                      </span>
+                    </button>
+                    
+                    {/* Volume control toggle button */}
+                    <button 
+                      className="action-button"
+                      onClick={() => setShowVolumeControl(!showVolumeControl)}
+                      title={showVolumeControl ? "Hide volume control" : "Show volume control"}
+                    >
+                      <span className="material-symbols-outlined">
+                        {showVolumeControl ? "volume_up" : "volume_off"}
+                      </span>
+                    </button>
+                  </ControlTray>
+                </main>
+              </div>
+            </VisionProvider>
+          </SpeechProvider>
+        </PollingProvider>
       </LiveAPIProvider>
     </div>
   );

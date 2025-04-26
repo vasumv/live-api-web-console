@@ -15,6 +15,7 @@
  */
 import { memo, useState } from "react";
 import { useSpeech } from "../../contexts/SpeechContext";
+import { useVision } from "../../contexts/VisionContext";
 
 // Define the response structure based on the JSON format
 export interface StepInfo {
@@ -62,7 +63,10 @@ function TaskPanelComponent({
   onTogglePolling
 }: TaskPanelProps) {
   const [isExplanationExpanded, setIsExplanationExpanded] = useState<boolean>(true);
+  const [isVisionDescriptionExpanded, setIsVisionDescriptionExpanded] = useState<boolean>(true);
+  const [isVisionFrameExpanded, setIsVisionFrameExpanded] = useState<boolean>(false);
   const { speaking, isSpeechEnabled, setSpeechEnabled } = useSpeech();
+  const { lastDescription, analyzing, lastFrameData } = useVision();
 
   return (
     <div className="expresso-container" style={{
@@ -189,6 +193,95 @@ function TaskPanelComponent({
               }} />
             )}
             {latestResponse.chatResponse}
+            
+            {/* Vision frame section */}
+            {lastFrameData && (
+              <div style={{ marginTop: "8px" }}>
+                <div 
+                  onClick={() => setIsVisionFrameExpanded(!isVisionFrameExpanded)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    userSelect: "none",
+                    fontSize: "12px",
+                    color: colors.onSurfaceVariant,
+                    paddingTop: "8px",
+                    borderTop: `1px solid ${colors.border}`
+                  }}
+                >
+                  <span style={{ 
+                    marginRight: "6px",
+                    transform: isVisionFrameExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                    display: "inline-block"
+                  }}>▶</span>
+                  <span>
+                    Video Frame
+                  </span>
+                </div>
+                {isVisionFrameExpanded && (
+                  <div style={{
+                    marginTop: "8px",
+                    textAlign: "center"
+                  }}>
+                    <img 
+                      src={lastFrameData} 
+                      alt="Current frame" 
+                      style={{
+                        maxWidth: "100%",
+                        maxHeight: "200px",
+                        borderRadius: "8px",
+                        border: `1px solid ${colors.border}`
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Vision description section */}
+            {lastDescription && (
+              <div style={{ marginTop: "8px" }}>
+                <div 
+                  onClick={() => setIsVisionDescriptionExpanded(!isVisionDescriptionExpanded)}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    cursor: "pointer",
+                    userSelect: "none",
+                    fontSize: "12px",
+                    color: analyzing ? colors.primary : colors.onSurfaceVariant,
+                    paddingTop: "8px",
+                    borderTop: `1px solid ${colors.border}`
+                  }}
+                >
+                  <span style={{ 
+                    marginRight: "6px",
+                    transform: isVisionDescriptionExpanded ? "rotate(90deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                    display: "inline-block"
+                  }}>▶</span>
+                  <span>
+                    Video Description
+                    {analyzing && <span style={{ marginLeft: "4px", color: colors.primary }}>(analyzing...)</span>}
+                  </span>
+                </div>
+                {isVisionDescriptionExpanded && (
+                  <div style={{
+                    marginTop: "4px",
+                    paddingLeft: "16px",
+                    fontSize: "12px",
+                    color: colors.primary,
+                    opacity: 0.9
+                  }}>
+                    {lastDescription}
+                  </div>
+                )}
+              </div>
+            )}
+            
+            {/* Explanation section */}
             {latestResponse.currentStepExplanation && (
               <div style={{ marginTop: "8px" }}>
                 <div 
@@ -363,9 +456,61 @@ function TaskPanelComponent({
               }}>
                 {latestRawText}
               </pre>
+              
+              {/* Add frame display even when no valid response */}
+              {lastFrameData && (
+                <div style={{ marginTop: "16px" }}>
+                  <h4 style={{ 
+                    margin: "0 0 8px 0", 
+                    fontSize: "14px", 
+                    color: colors.onSurfaceVariant 
+                  }}>
+                    Current Frame:
+                  </h4>
+                  <div style={{ textAlign: "center" }}>
+                    <img 
+                      src={lastFrameData} 
+                      alt="Current frame" 
+                      style={{
+                        maxWidth: "100%",
+                        maxHeight: "200px",
+                        borderRadius: "8px",
+                        border: `1px solid ${colors.border}`
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
-            <p>Ask the assistant to help with a task, and I'll guide you through the steps.</p>
+            <div>
+              <p>Ask the assistant to help with a task, and I'll guide you through the steps.</p>
+              
+              {/* Add frame display in initial state */}
+              {lastFrameData && (
+                <div style={{ marginTop: "16px" }}>
+                  <h4 style={{ 
+                    margin: "0 0 8px 0", 
+                    fontSize: "14px", 
+                    color: colors.onSurfaceVariant 
+                  }}>
+                    Current Frame:
+                  </h4>
+                  <div style={{ textAlign: "center" }}>
+                    <img 
+                      src={lastFrameData} 
+                      alt="Current frame" 
+                      style={{
+                        maxWidth: "100%",
+                        maxHeight: "200px",
+                        borderRadius: "8px",
+                        border: `1px solid ${colors.border}`
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

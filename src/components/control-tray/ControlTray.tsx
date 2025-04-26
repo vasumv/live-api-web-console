@@ -18,6 +18,7 @@ import cn from "classnames";
 
 import { memo, ReactNode, RefObject, useEffect, useRef, useState } from "react";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
+import { useVision } from "../../contexts/VisionContext";
 import { UseMediaStreamResult } from "../../hooks/use-media-stream-mux";
 import { useScreenCapture } from "../../hooks/use-screen-capture";
 import { useWhepStream } from "../../hooks/use-whep-stream";
@@ -81,6 +82,9 @@ function ControlTray({
   const renderCanvasRef = useRef<HTMLCanvasElement>(null);
   const connectButtonRef = useRef<HTMLButtonElement>(null);
   const audioStartedRef = useRef<boolean>(false);
+  
+  // Get vision context to send frames
+  const { sendFrame, connected: visionConnected } = useVision();
   
   // Settings state
   const [showSettings, setShowSettings] = useState(false);
@@ -208,10 +212,17 @@ function ControlTray({
         ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
         const base64 = canvas.toDataURL("image/jpeg", 1.0);
         const data = base64.slice(base64.indexOf(",") + 1, Infinity);
+        
+        // Send frame to main LiveAPI
         client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
+        
+        // Also send to vision context if connected and polling is enabled
+        if (visionConnected && isPollingEnabled) {
+          sendFrame(base64);
+        }
       }
       if (connected) {
-        timeoutId = window.setTimeout(sendVideoFrame, 1000 / 0.5);
+        timeoutId = window.setTimeout(sendVideoFrame, 1000 / 5);
       }
     }
     if (connected && activeVideoStream !== null) {
@@ -220,7 +231,7 @@ function ControlTray({
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [connected, activeVideoStream, client, videoRef]);
+  }, [connected, activeVideoStream, client, videoRef, visionConnected, isPollingEnabled, sendFrame]);
 
   //handler for swapping from one video-stream to the next
   const changeStreams = (next?: UseMediaStreamResult) => async () => {
@@ -256,7 +267,6 @@ function ControlTray({
         } else {
           setActiveVideoSource(null);
         }
-      
         
         // Start audio recorder after setting the new stream
         if (connected && !muted) {
@@ -339,6 +349,17 @@ function ControlTray({
                 aria-label="Settings"
               >
                 <span className="material-symbols-outlined">settings</span>
+              </button>
+              
+              {/* Polling toggle - only new button added */}
+              <button
+                className={cn("action-button", { active: isPollingEnabled })}
+                onClick={() => setIsPollingEnabled(!isPollingEnabled)}
+                title={isPollingEnabled ? "Disable polling" : "Enable polling"}
+              >
+                <span className="material-symbols-outlined">
+                  {isPollingEnabled ? "sync" : "sync_disabled"}
+                </span>
               </button>
             </>
           )}

@@ -18,6 +18,7 @@ import { useEffect, useState, memo, useRef, useCallback } from "react";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import { usePolling } from "../../contexts/PollingContext";
 import { useSpeech } from "../../contexts/SpeechContext";
+import { useVision } from "../../contexts/VisionContext";
 import { ToolCall, ServerContent, isModelTurn } from "../../multimodal-live-types";
 import { TaskPanel, ResponseJson } from "./TaskPanel";
 
@@ -27,9 +28,17 @@ function ExpressoComponent() {
   const [isPolling, setIsPolling] = useState<boolean>(false);
   const pollingTimerRef = useRef<number | null>(null);
   const lastSpokenResponseRef = useRef<string | null>(null);
+  const lastVisionRequestTimeRef = useRef<number>(0);
   
   const { client, setConfig, connect, disconnect } = useLiveAPIContext();
   const { speak, connected: speechConnected, connect: connectSpeech } = useSpeech();
+  const { 
+    requestAnalysis, 
+    lastDescription, 
+    connected: visionConnected, 
+    connect: connectVision,
+    analyzing: visionAnalyzing
+  } = useVision();
   
   const { isPollingEnabled, pollingInterval, setIsPollingEnabled } = usePolling();
 
@@ -88,6 +97,18 @@ function ExpressoComponent() {
     });
   }, [setConfig]);
 
+  // Auto-connect vision and speech when main client connects
+  useEffect(() => {
+    if (isPollingEnabled) {
+      if (!visionConnected) {
+        connectVision();
+      }
+      if (!speechConnected) {
+        connectSpeech();
+      }
+    }
+  }, [isPollingEnabled, visionConnected, speechConnected, connectVision, connectSpeech]);
+
   // Function to check status and poll for updates
   const pollForStatusUpdate = useCallback(() => {
     if (!latestResponse || !client || !isPollingEnabled) {
@@ -96,26 +117,57 @@ function ExpressoComponent() {
 
     setIsPolling(true);
     
+    // Only request a new vision analysis if:
+    // 1. We're not currently analyzing
+    // 2. It's been at least 2 seconds since our last request
+    // This prevents request flooding and gives time for response streaming
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastVisionRequestTimeRef.current;
+    const minimumRequestInterval = 2000; // 2 seconds
+    
+    if (visionConnected && !visionAnalyzing && timeSinceLastRequest > minimumRequestInterval) {
+      // Update the last request time
+      lastVisionRequestTimeRef.current = now;
+      
+      // Request the vision analysis
+      requestAnalysis(
+        // `Analyze the video feed for the current task step that involves: "${latestResponse.currentStepDetailedDescription}"
+        `
+        Example format:
+        {
+          "videoDescription": "<detailed description of the video>"
+        }
+        Be extremely precise about object positions and actions being performed. Only output the JSON object, no comments or additional text.
+        `
+      );
+    }
+    
+    // Use the vision description if available, otherwise use a placeholder
+    // Make sure to trim and clean up any JSON artifacts that might remain
+    const visionDescription = lastDescription 
+      ? lastDescription.replace(/```json|```/g, '').trim() 
+      : "No detailed visual information available yet";
+    
     // Send a request to check for status updates
     client.send([{ 
       text: `
           Instructions:
-            1. Observe video feed only. Ignore audio/text. Describe what you see in the video feed in detail and put it in the currentStepExplanation of the JSON response.
-            2. Identify the objective of the current step to be tracked based on the following description: [${latestResponse.currentStepDetailedDescription}].
-            3. Determine if the status of the current step has changed (to 'done', 'inprogress', or remains 'todo') when you compare it to the description of the video feed.
+            1. Here is what we see in the video feed now: "${visionDescription}"
+            2. The objective of the current step is: "${latestResponse.currentStepDetailedDescription}"
+            3. Determine if the status of the current step has changed (to 'done', 'inprogress', or remains 'todo') based on the video description.
             4. If no change is observed, respond with: 'no' (and nothing else).
             5. If a change is observed:
-              a. Re-confirm the status change by repeating steps 1 and 3.
+              a. Re-confirm the status change based on the video description.
               b. If the re-confirmation matches the initial observation, respond with the updated JSON containing the new status (and nothing else).
               c. If the re-confirmation does not match, or if you are unsure of the change, respond with: 'no'.
       `
     }]);
 
-    // Reset polling flag after a brief delay (1 second) to show the indicator
+    // Reset polling flag after a brief delay to show the indicator
     setTimeout(() => {
       setIsPolling(false);
     }, 1000);
-  }, [client, latestResponse, isPollingEnabled]);
+  }, [client, latestResponse, isPollingEnabled, visionConnected, visionAnalyzing, requestAnalysis, lastDescription]);
 
   // Setup or clear polling timer when polling interval or enabled state changes
   useEffect(() => {
@@ -143,13 +195,6 @@ function ExpressoComponent() {
   const handleTogglePolling = useCallback(() => {
     setIsPollingEnabled(!isPollingEnabled);
   }, [isPollingEnabled, setIsPollingEnabled]);
-
-  // Ensure speech API is connected when main API is connected
-  useEffect(() => {
-    if (!speechConnected) {
-      connectSpeech();
-    }
-  }, [speechConnected, connectSpeech]);
 
   // Handle speaking the chatResponse
   useEffect(() => {
