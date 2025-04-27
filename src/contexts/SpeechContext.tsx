@@ -84,7 +84,6 @@ export const SpeechProvider: FC<SpeechProviderProps> = ({ children, apiKey }) =>
     
     const onComplete = () => {
       setSpeaking(false);
-      processNextInQueue();
     };
     
     client
@@ -140,28 +139,11 @@ export const SpeechProvider: FC<SpeechProviderProps> = ({ children, apiKey }) =>
     }
   }, [client]);
   
-  // Process the next item in the speech queue
-  const processNextInQueue = useCallback(() => {
-    if (processingRef.current || speakQueueRef.current.length === 0 || !connected || !isSpeechEnabled) {
-      processingRef.current = false;
-      return;
-    }
-    
-    processingRef.current = true;
-    const nextText = speakQueueRef.current.shift();
-    
-    if (nextText) {
-      setSpeaking(true);
-      client.send([{ text: "Repeat the following: \n" + nextText }], true);
-    } else {
-      processingRef.current = false;
-    }
-  }, [client, connected, isSpeechEnabled]);
-  
-  // Add text to the speech queue and process it
+  // Speak the provided text immediately, interrupting any current speech
   const speak = useCallback(async (text: string) => {
     if (!isSpeechEnabled) return;
     
+    // Ensure we're connected
     if (!connected) {
       try {
         await connect();
@@ -171,21 +153,21 @@ export const SpeechProvider: FC<SpeechProviderProps> = ({ children, apiKey }) =>
       }
     }
     
-    speakQueueRef.current.push(text);
+    // Stop any currently playing audio
+    if (audioStreamerRef.current) {
+      audioStreamerRef.current.stop();
+    }
     
-    if (!processingRef.current) {
-      processNextInQueue();
-    }
-  }, [connect, connected, isSpeechEnabled, processNextInQueue]);
-  
-  // When speech is completed, process the next item
-  useEffect(() => {
-    if (!speaking && processingRef.current) {
-      processingRef.current = false;
-      // Add a small delay before processing the next item
-      setTimeout(processNextInQueue, 300);
-    }
-  }, [speaking, processNextInQueue]);
+    // Clear any pending speech
+    speakQueueRef.current = [];
+    processingRef.current = false;
+    
+    // Send the new text to be spoken
+    setSpeaking(true);
+    client.send([{ text: "Repeat the following: \n" + text }], true);
+    
+    console.log("Speaking new text:", text.substring(0, 50) + (text.length > 50 ? "..." : ""));
+  }, [connect, connected, isSpeechEnabled]);
 
   // Export the context value
   const contextValue: SpeechContextType = {
