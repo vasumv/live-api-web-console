@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { memo, useState } from "react";
+import { memo, useState, useEffect, useCallback, FormEvent } from "react";
 import { useSpeech } from "../../contexts/SpeechContext";
 import { useVision } from "../../contexts/VisionContext";
 
@@ -65,8 +65,49 @@ function TaskPanelComponent({
   const [isExplanationExpanded, setIsExplanationExpanded] = useState<boolean>(true);
   const [isVisionDescriptionExpanded, setIsVisionDescriptionExpanded] = useState<boolean>(true);
   const [isVisionFrameExpanded, setIsVisionFrameExpanded] = useState<boolean>(false);
+  const [currentFrameIndex, setCurrentFrameIndex] = useState<number>(0);
+  const [showModelSelector, setShowModelSelector] = useState<boolean>(false);
   const { speaking, isSpeechEnabled, setSpeechEnabled } = useSpeech();
-  const { lastDescription, analyzing, lastFrameData } = useVision();
+  const { 
+    lastDescription, 
+    analyzing, 
+    frameBuffer, 
+    openAIConnected, 
+    currentModel,
+    setCurrentModel 
+  } = useVision();
+
+  // Auto-rotate frames only if there are frames
+  useEffect(() => {
+    if (!isVisionFrameExpanded || !frameBuffer || frameBuffer.length === 0) return;
+    
+    console.log("Frame buffer in TaskPanel:", frameBuffer);
+    
+    const intervalId = setInterval(() => {
+      setCurrentFrameIndex((prevIndex) => 
+        prevIndex === frameBuffer.length - 1 ? 0 : prevIndex + 1
+      );
+    }, 2000);
+    
+    return () => clearInterval(intervalId);
+  }, [isVisionFrameExpanded, frameBuffer]);
+  
+  // Frame navigation handlers - only if frames are available
+  const goToPrevFrame = useCallback(() => {
+    if (!frameBuffer || frameBuffer.length === 0) return;
+    
+    setCurrentFrameIndex((prevIndex) => 
+      prevIndex === 0 ? frameBuffer.length - 1 : prevIndex - 1
+    );
+  }, [frameBuffer]);
+  
+  const goToNextFrame = useCallback(() => {
+    if (!frameBuffer || frameBuffer.length === 0) return;
+    
+    setCurrentFrameIndex((prevIndex) => 
+      prevIndex === frameBuffer.length - 1 ? 0 : prevIndex + 1
+    );
+  }, [frameBuffer]);
 
   return (
     <div className="expresso-container" style={{
@@ -94,6 +135,30 @@ function TaskPanelComponent({
       }}>
         <h2 style={{ margin: 0, fontWeight: 500, fontSize: "18px", color: colors.onBackground }}>Task Assistant</h2>
         <div style={{ display: "flex", gap: "12px" }}>
+          {/* Model Selector Button */}
+          <div 
+            onClick={() => setShowModelSelector(!showModelSelector)}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              color: currentModel === "openai" && openAIConnected 
+                ? colors.success 
+                : colors.onSurfaceVariant,
+              cursor: "pointer",
+              padding: "4px 8px",
+              borderRadius: "12px",
+              transition: "background-color 0.2s ease"
+            }}
+            title={`Current model: ${currentModel === "openai" ? "OpenAI GPT-4o" : "Google Gemini"}`}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path 
+                fill="currentColor" 
+                d="M9,22A1,1 0 0,1 8,21V18H4A2,2 0 0,1 2,16V4C2,2.89 2.9,2 4,2H20A2,2 0 0,1 22,4V16A2,2 0 0,1 20,18H13.9L10.2,21.71C10,21.9 9.75,22 9.5,22V22H9M10,16V19.08L13.08,16H20V4H4V16H10Z" 
+              />
+            </svg>
+          </div>
+          
           {/* Speech toggle button */}
           <div 
             onClick={() => setSpeechEnabled(!isSpeechEnabled)}
@@ -164,6 +229,96 @@ function TaskPanelComponent({
         </div>
       </div>
       
+      {/* Model Selector Panel */}
+      {showModelSelector && (
+        <div style={{
+          padding: "12px 16px",
+          borderBottom: `1px solid ${colors.border}`,
+          backgroundColor: colors.surface
+        }}>
+          <div style={{ marginBottom: "8px", color: colors.onBackground, fontSize: "14px" }}>
+            Select Vision Analysis Model:
+          </div>
+          
+          <div style={{ display: "flex", gap: "12px" }}>
+            {/* OpenAI Option */}
+            <div 
+              onClick={() => setCurrentModel("openai")}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: currentModel === "openai" 
+                  ? `${colors.primary}22` 
+                  : colors.surfaceVariant,
+                border: `1px solid ${currentModel === "openai" ? colors.primary : colors.border}`,
+                borderRadius: "4px",
+                cursor: "pointer",
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}
+            >
+              <div style={{
+                width: "16px",
+                height: "16px",
+                borderRadius: "50%",
+                backgroundColor: openAIConnected ? colors.success : "gray",
+                flexShrink: 0
+              }} />
+              <div>
+                <div style={{ color: colors.onBackground, fontWeight: currentModel === "openai" ? 500 : 'normal' }}>
+                  OpenAI GPT-4o
+                </div>
+                <div style={{ fontSize: "12px", color: colors.onSurfaceVariant }}>
+                  {openAIConnected ? "Connected" : "Not connected"}
+                </div>
+              </div>
+            </div>
+            
+            {/* Google Option */}
+            <div 
+              onClick={() => setCurrentModel("google")}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: currentModel === "google" 
+                  ? `${colors.primary}22` 
+                  : colors.surfaceVariant,
+                border: `1px solid ${currentModel === "google" ? colors.primary : colors.border}`,
+                borderRadius: "4px",
+                cursor: "pointer",
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}
+            >
+              <div style={{
+                width: "16px",
+                height: "16px",
+                borderRadius: "50%",
+                backgroundColor: "rgb(66, 133, 244)",
+                flexShrink: 0
+              }} />
+              <div>
+                <div style={{ color: colors.onBackground, fontWeight: currentModel === "google" ? 500 : 'normal' }}>
+                  Google Gemini
+                </div>
+                <div style={{ fontSize: "12px", color: colors.onSurfaceVariant }}>
+                  Default model
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <p style={{ fontSize: "12px", color: colors.onSurfaceVariant, margin: "8px 0 0" }}>
+            {openAIConnected 
+              ? "OpenAI API key detected from environment variables." 
+              : "OpenAI API key not found or invalid. Add REACT_APP_OPENAI_API_KEY to your .env file."
+            }
+          </p>
+        </div>
+      )}
+      
       {latestResponse ? (
         <div className="response-container" style={{
           padding: "0 16px 16px"
@@ -195,7 +350,7 @@ function TaskPanelComponent({
             {latestResponse.chatResponse}
             
             {/* Vision frame section */}
-            {lastFrameData && (
+            {frameBuffer && frameBuffer.length > 0 && (
               <div style={{ marginTop: "8px" }}>
                 <div 
                   onClick={() => setIsVisionFrameExpanded(!isVisionFrameExpanded)}
@@ -217,24 +372,109 @@ function TaskPanelComponent({
                     display: "inline-block"
                   }}>▶</span>
                   <span>
-                    Video Frame
+                    Video Frames ({frameBuffer.length})
                   </span>
                 </div>
-                {isVisionFrameExpanded && (
+                {isVisionFrameExpanded && frameBuffer.length > 0 && (
                   <div style={{
                     marginTop: "8px",
-                    textAlign: "center"
+                    textAlign: "center",
+                    position: "relative"
                   }}>
-                    <img 
-                      src={lastFrameData} 
-                      alt="Current frame" 
-                      style={{
-                        maxWidth: "100%",
-                        maxHeight: "200px",
-                        borderRadius: "8px",
-                        border: `1px solid ${colors.border}`
-                      }}
-                    />
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      position: "relative"
+                    }}>
+                      {/* Left navigation button */}
+                      <button 
+                        onClick={goToPrevFrame}
+                        style={{
+                          position: "absolute",
+                          left: "0",
+                          zIndex: 2,
+                          background: "rgba(32, 33, 36, 0.7)",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "30px",
+                          height: "30px",
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          color: colors.onBackground
+                        }}
+                      >
+                        ◀
+                      </button>
+                      
+                      {/* Current frame */}
+                      <img 
+                        src={frameBuffer[currentFrameIndex]} 
+                        alt={`Frame ${currentFrameIndex + 1} of ${frameBuffer.length}`} 
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "200px",
+                          borderRadius: "8px",
+                          border: `1px solid ${colors.border}`
+                        }}
+                      />
+                      
+                      {/* Right navigation button */}
+                      <button 
+                        onClick={goToNextFrame}
+                        style={{
+                          position: "absolute",
+                          right: "0",
+                          zIndex: 2,
+                          background: "rgba(32, 33, 36, 0.7)",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "30px",
+                          height: "30px",
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          color: colors.onBackground
+                        }}
+                      >
+                        ▶
+                      </button>
+                    </div>
+                    
+                    {/* Frame indicator dots */}
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: "6px",
+                      marginTop: "8px"
+                    }}>
+                      {frameBuffer.map((_, index) => (
+                        <div
+                          key={index}
+                          onClick={() => setCurrentFrameIndex(index)}
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            backgroundColor: index === currentFrameIndex ? colors.primary : colors.onSurfaceVariant,
+                            cursor: "pointer",
+                            opacity: index === currentFrameIndex ? 1 : 0.5
+                          }}
+                        />
+                      ))}
+                    </div>
+                    
+                    {/* Frame counter */}
+                    <div style={{
+                      marginTop: "4px",
+                      fontSize: "12px",
+                      color: colors.onSurfaceVariant
+                    }}>
+                      Frame {currentFrameIndex + 1} of {frameBuffer.length}
+                    </div>
                   </div>
                 )}
               </div>
@@ -458,26 +698,114 @@ function TaskPanelComponent({
               </pre>
               
               {/* Add frame display even when no valid response */}
-              {lastFrameData && (
+              {frameBuffer && frameBuffer.length > 0 && (
                 <div style={{ marginTop: "16px" }}>
                   <h4 style={{ 
                     margin: "0 0 8px 0", 
                     fontSize: "14px", 
                     color: colors.onSurfaceVariant 
                   }}>
-                    Current Frame:
+                    Video Frames:
                   </h4>
-                  <div style={{ textAlign: "center" }}>
-                    <img 
-                      src={lastFrameData} 
-                      alt="Current frame" 
-                      style={{
-                        maxWidth: "100%",
-                        maxHeight: "200px",
-                        borderRadius: "8px",
-                        border: `1px solid ${colors.border}`
-                      }}
-                    />
+                  <div style={{
+                    marginTop: "8px",
+                    textAlign: "center",
+                    position: "relative"
+                  }}>
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      position: "relative"
+                    }}>
+                      {/* Left navigation button */}
+                      <button 
+                        onClick={goToPrevFrame}
+                        style={{
+                          position: "absolute",
+                          left: "0",
+                          zIndex: 2,
+                          background: "rgba(32, 33, 36, 0.7)",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "30px",
+                          height: "30px",
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          color: colors.onBackground
+                        }}
+                      >
+                        ◀
+                      </button>
+                      
+                      {/* Current frame */}
+                      <img 
+                        src={frameBuffer[currentFrameIndex]} 
+                        alt={`Frame ${currentFrameIndex + 1} of ${frameBuffer.length}`} 
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "200px",
+                          borderRadius: "8px",
+                          border: `1px solid ${colors.border}`
+                        }}
+                      />
+                      
+                      {/* Right navigation button */}
+                      <button 
+                        onClick={goToNextFrame}
+                        style={{
+                          position: "absolute",
+                          right: "0",
+                          zIndex: 2,
+                          background: "rgba(32, 33, 36, 0.7)",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "30px",
+                          height: "30px",
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          color: colors.onBackground
+                        }}
+                      >
+                        ▶
+                      </button>
+                    </div>
+                    
+                    {/* Frame indicator dots */}
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: "6px",
+                      marginTop: "8px"
+                    }}>
+                      {frameBuffer.map((_, index) => (
+                        <div
+                          key={index}
+                          onClick={() => setCurrentFrameIndex(index)}
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            backgroundColor: index === currentFrameIndex ? colors.primary : colors.onSurfaceVariant,
+                            cursor: "pointer",
+                            opacity: index === currentFrameIndex ? 1 : 0.5
+                          }}
+                        />
+                      ))}
+                    </div>
+                    
+                    {/* Frame counter */}
+                    <div style={{
+                      marginTop: "4px",
+                      fontSize: "12px",
+                      color: colors.onSurfaceVariant
+                    }}>
+                      Frame {currentFrameIndex + 1} of {frameBuffer.length}
+                    </div>
                   </div>
                 </div>
               )}
@@ -487,26 +815,114 @@ function TaskPanelComponent({
               <p>Ask the assistant to help with a task, and I'll guide you through the steps.</p>
               
               {/* Add frame display in initial state */}
-              {lastFrameData && (
+              {frameBuffer && frameBuffer.length > 0 && (
                 <div style={{ marginTop: "16px" }}>
                   <h4 style={{ 
                     margin: "0 0 8px 0", 
                     fontSize: "14px", 
                     color: colors.onSurfaceVariant 
                   }}>
-                    Current Frame:
+                    Video Frames:
                   </h4>
-                  <div style={{ textAlign: "center" }}>
-                    <img 
-                      src={lastFrameData} 
-                      alt="Current frame" 
-                      style={{
-                        maxWidth: "100%",
-                        maxHeight: "200px",
-                        borderRadius: "8px",
-                        border: `1px solid ${colors.border}`
-                      }}
-                    />
+                  <div style={{
+                    marginTop: "8px",
+                    textAlign: "center",
+                    position: "relative"
+                  }}>
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      alignItems: "center",
+                      position: "relative"
+                    }}>
+                      {/* Left navigation button */}
+                      <button 
+                        onClick={goToPrevFrame}
+                        style={{
+                          position: "absolute",
+                          left: "0",
+                          zIndex: 2,
+                          background: "rgba(32, 33, 36, 0.7)",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "30px",
+                          height: "30px",
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          color: colors.onBackground
+                        }}
+                      >
+                        ◀
+                      </button>
+                      
+                      {/* Current frame */}
+                      <img 
+                        src={frameBuffer[currentFrameIndex]} 
+                        alt={`Frame ${currentFrameIndex + 1} of ${frameBuffer.length}`} 
+                        style={{
+                          maxWidth: "100%",
+                          maxHeight: "200px",
+                          borderRadius: "8px",
+                          border: `1px solid ${colors.border}`
+                        }}
+                      />
+                      
+                      {/* Right navigation button */}
+                      <button 
+                        onClick={goToNextFrame}
+                        style={{
+                          position: "absolute",
+                          right: "0",
+                          zIndex: 2,
+                          background: "rgba(32, 33, 36, 0.7)",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "30px",
+                          height: "30px",
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          color: colors.onBackground
+                        }}
+                      >
+                        ▶
+                      </button>
+                    </div>
+                    
+                    {/* Frame indicator dots */}
+                    <div style={{
+                      display: "flex",
+                      justifyContent: "center",
+                      gap: "6px",
+                      marginTop: "8px"
+                    }}>
+                      {frameBuffer.map((_, index) => (
+                        <div
+                          key={index}
+                          onClick={() => setCurrentFrameIndex(index)}
+                          style={{
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "50%",
+                            backgroundColor: index === currentFrameIndex ? colors.primary : colors.onSurfaceVariant,
+                            cursor: "pointer",
+                            opacity: index === currentFrameIndex ? 1 : 0.5
+                          }}
+                        />
+                      ))}
+                    </div>
+                    
+                    {/* Frame counter */}
+                    <div style={{
+                      marginTop: "4px",
+                      fontSize: "12px",
+                      color: colors.onSurfaceVariant
+                    }}>
+                      Frame {currentFrameIndex + 1} of {frameBuffer.length}
+                    </div>
                   </div>
                 </div>
               )}

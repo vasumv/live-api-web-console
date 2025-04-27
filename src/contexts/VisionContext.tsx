@@ -1,9 +1,10 @@
 /**
- * Context for handling video frame analysis using Gemini API
+ * Context for handling video frame analysis using OpenAI API
  */
 
 import { createContext, FC, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { MultimodalLiveClient } from "../lib/multimodal-live-client";
+import { OpenAIVisionClient } from "../lib/openai-vision-client";
 
 // Define the shape of our context
 interface VisionContextType {
@@ -18,6 +19,10 @@ interface VisionContextType {
   isVisionEnabled: boolean;
   setVisionEnabled: (enabled: boolean) => void;
   lastFrameData: string | null;
+  frameBuffer: string[];
+  openAIConnected: boolean;
+  currentModel: "openai" | "google";
+  setCurrentModel: (model: "openai" | "google") => void;
 }
 
 // Create the context
@@ -35,152 +40,141 @@ interface VisionProviderProps {
 }
 
 export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) => {
-  // Create a client for vision analysis
+  // Create a client for vision analysis (still keeping Google client for other functionality)
   const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent`;
   const client = useMemo(
     () => new MultimodalLiveClient({ url, apiKey }),
     [url, apiKey]
   );
   
+  // Get OpenAI API key from environment variables
+  const openAIApiKey = process.env.REACT_APP_OPENAI_API_KEY || "";
+  
+  // Model selection state
+  const [currentModel, setCurrentModel] = useState<"openai" | "google">("openai");
+  
+  // OpenAI connection state
+  const [openAIConnected, setOpenAIConnected] = useState<boolean>(false);
+  
+  // Create OpenAI Vision client
+  const openAIClient = useMemo(() => {
+    if (!openAIApiKey) return null;
+    return new OpenAIVisionClient({ 
+      apiKey: openAIApiKey,
+      model: "gpt-4o"
+    });
+  }, [openAIApiKey]);
+  
   const [connected, setConnected] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [isVisionEnabled, setVisionEnabled] = useState(true);
   const [lastDescription, setLastDescription] = useState<string | null>(null);
   const [lastFrameData, setLastFrameData] = useState<string | null>(null);
-  const pendingFramesRef = useRef<{ count: number }>({ count: 0 });
   
-  // Buffer for accumulating streamed content
-  const streamBufferRef = useRef<string>("");
-  // Track if we're waiting for a complete JSON object
-  const waitingForJsonRef = useRef<boolean>(false);
-  // Last turn ID to track new turns
-  const lastTurnIdRef = useRef<string | null>(null);
+  // Store the latest 10 frames
+  const framesBufferRef = useRef<string[]>([]);
+  const [frameBuffer, setFrameBuffer] = useState<string[]>([]);
+  const MAX_FRAMES = 10;
   
-  // Set up event listeners for the client
+  // Test OpenAI connection when component mounts
+  useEffect(() => {
+    if (!openAIClient) {
+      setOpenAIConnected(false);
+      return;
+    }
+    
+    // Test the connection
+    const testConnection = async () => {
+      try {
+        const success = await openAIClient.testConnection();
+        setOpenAIConnected(success);
+        if (success) {
+          console.log("OpenAI GPT-4o connected successfully!");
+          
+          // If Google isn't connected yet, set a message
+          if (!connected) {
+            setLastDescription("OpenAI GPT-4o connected successfully! Request analysis to see results.");
+          }
+        } else {
+          // If OpenAI fails but it's the selected model, switch to Google
+          if (currentModel === "openai") {
+            console.log("Falling back to Google API");
+            setCurrentModel("google");
+          }
+        }
+      } catch (error) {
+        console.error("Failed to connect to OpenAI:", error);
+        setOpenAIConnected(false);
+        
+        // If OpenAI fails but it's the selected model, switch to Google
+        if (currentModel === "openai") {
+          console.log("Falling back to Google API");
+          setCurrentModel("google");
+        }
+      }
+    };
+    
+    testConnection();
+  }, [openAIClient, connected, currentModel]);
+  
+  // Set up event listeners for the OpenAI client
+  useEffect(() => {
+    if (!openAIClient) return;
+    
+    const onResponse = (data: any) => {
+      console.log('OpenAI Vision response:', data);
+      if (data.videoDescription) {
+        setLastDescription(data.videoDescription);
+        setAnalyzing(false);
+      }
+    };
+    
+    const onError = (error: Error) => {
+      console.error('OpenAI Vision error:', error);
+      setLastDescription(`Error analyzing frames: ${error.message}`);
+      setAnalyzing(false);
+    };
+    
+    openAIClient.on('response', onResponse);
+    openAIClient.on('error', onError);
+    
+    return () => {
+      openAIClient.off('response', onResponse);
+      openAIClient.off('error', onError);
+    };
+  }, [openAIClient]);
+  
+  // Remove the interval update of frameBuffer
+  useEffect(() => {
+    if (!isVisionEnabled) return;
+    
+    // Only initialize on mount if needed
+    if (frameBuffer.length === 0 && framesBufferRef.current.length > 0) {
+      setFrameBuffer([...framesBufferRef.current]);
+    }
+  }, [isVisionEnabled, frameBuffer.length]);
+  
+  // Set up event listeners for the Google client (kept for compatibility)
   useEffect(() => {
     const onClose = () => {
       setConnected(false);
       setAnalyzing(false);
-      streamBufferRef.current = ""; // Clear buffer on disconnect
-      waitingForJsonRef.current = false;
-    };
-    
-    const onContent = (content: any) => {
-      // If this is from a new turn, reset the buffer
-      const turnId = content?.modelTurn?.turnId || null;
-      if (turnId && turnId !== lastTurnIdRef.current) {
-        lastTurnIdRef.current = turnId;
-        streamBufferRef.current = "";
-      }
-      
-      if (content?.modelTurn?.parts && content.modelTurn.parts.length > 0) {
-        const text = content.modelTurn.parts.map((part: any) => part.text).join('');
-        
-        if (text) {
-          // Add to the buffer
-          streamBufferRef.current += text;
-          
-          try {
-            // Try to find a complete JSON object in the buffer
-            const cleanedText = streamBufferRef.current.replace(/```json|```/g, '').trim();
-            
-            // Regular expression to find a JSON object
-            const jsonMatch = cleanedText.match(/\{.*\}/s);
-            if (jsonMatch) {
-              const potentialJson = jsonMatch[0];
-              try {
-                // See if we can parse it as valid JSON
-                const parsed = JSON.parse(potentialJson) as VisionResponse;
-                
-                // If it has a videoDescription field, use that
-                if (parsed.videoDescription) {
-                  setLastDescription(parsed.videoDescription);
-                  console.log("Vision: Successfully parsed complete JSON response");
-                  
-                  // Clear the waiting flag
-                  waitingForJsonRef.current = false;
-                  
-                  // Clear buffer since we successfully processed the response
-                  streamBufferRef.current = "";
-                  
-                  // Mark analysis as complete
-                  setAnalyzing(false);
-                }
-              } catch (jsonError) {
-                // This JSON object wasn't complete or valid - keep waiting
-                console.log("Vision: Found JSON-like structure but it wasn't valid, continuing to accumulate");
-                waitingForJsonRef.current = true;
-              }
-            } else if (waitingForJsonRef.current && !cleanedText.includes('{')) {
-              // We were waiting for JSON but got text without any JSON markers
-              // This likely means we should just use the text as is
-              console.log("Vision: Was waiting for JSON but received plain text");
-              waitingForJsonRef.current = false;
-              setLastDescription(cleanedText);
-              streamBufferRef.current = "";
-              setAnalyzing(false);
-            } else if (waitingForJsonRef.current && streamBufferRef.current.length > 4000) {
-              // This is getting too large, something went wrong - reset
-              console.log("Vision: Buffer too large, resetting");
-              waitingForJsonRef.current = false;
-              streamBufferRef.current = "";
-              setAnalyzing(false);
-            } else if (cleanedText.includes('{')) {
-              // We found an opening brace but no closing one yet - continue accumulating
-              waitingForJsonRef.current = true;
-            } else if (!waitingForJsonRef.current && streamBufferRef.current.length > 0) {
-              // If we have text but aren't waiting for JSON, use it directly
-              setLastDescription(streamBufferRef.current);
-              streamBufferRef.current = "";
-              setAnalyzing(false);
-            }
-          } catch (error) {
-            console.log("Vision: Error processing buffer", error);
-            
-            // If the buffer is too large, something went wrong - use what we have
-            if (streamBufferRef.current.length > 2000) {
-              setLastDescription(streamBufferRef.current);
-              streamBufferRef.current = "";
-              waitingForJsonRef.current = false;
-              setAnalyzing(false);
-            }
-          }
-        }
-      } else if (content?.turncomplete) {
-        // When the turn is complete, process any remaining buffer content
-        if (streamBufferRef.current.length > 0) {
-          console.log("Vision: Turn complete, processing remaining buffer");
-          setLastDescription(streamBufferRef.current);
-          streamBufferRef.current = "";
-          waitingForJsonRef.current = false;
-          setAnalyzing(false);
-        }
-      }
     };
     
     client
       .on("close", onClose)
-      .on("content", onContent)
       .on("turncomplete", () => {
-        // Extra handler for turn complete event
         setAnalyzing(false);
-        streamBufferRef.current = "";
-        waitingForJsonRef.current = false;
       });
       
     return () => {
       client
         .off("close", onClose)
-        .off("content", onContent)
         .off("turncomplete", () => {});
-      
-      // Clear buffer on unmount
-      streamBufferRef.current = "";
-      waitingForJsonRef.current = false;
     };
   }, [client]);
   
-  // Connect to the Gemini API with vision configuration
+  // Connect to the Google API (kept for compatibility)
   const connect = useCallback(async () => {
     if (connected) return;
     
@@ -189,15 +183,16 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
         model: "models/gemini-2.0-flash-exp",
         generationConfig: {
           responseModalities: "text",
-          // temperature: 0.1,      // Lower temperature for more focused output
-          // topP: 0.8,
-          // topK: 32
         },
         systemInstruction: {
           parts: [
             {
-              text: `Describe the video feed.
-                `
+              text: `Describe the video feed. Example format:
+                      {
+                        "videoDescription": "<describe the video feed in detail and the action taking place in the 10 frames I have provided>"
+                      }
+                    Be extremely precise about object positions and actions being performed. Only output the JSON object, no comments or additional text.
+                  `
             }
           ]
         }
@@ -215,40 +210,26 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     client.disconnect();
     setConnected(false);
     setAnalyzing(false);
-    streamBufferRef.current = ""; // Clear buffer on disconnect
-    waitingForJsonRef.current = false;
   }, [client]);
   
-  // Send frame to the vision API with rate limiting
-  // We only want to process significant frames, not every single one
+  // Store frame in buffer rather than sending immediately
   const sendFrame = useCallback((base64: string) => {
-    if (!isVisionEnabled || !connected) return;
-    
-    // Control the rate at which we process frames
-    // pendingFramesRef.current.count++;
-    
-    // Only process every 5th frame to avoid overwhelming the model
-    // if (pendingFramesRef.current.count % 5 !== 0) return;
+    if (!isVisionEnabled) return;
     
     // Clean image data if it's in base64 data URL format
-    // if (imageData.startsWith('data:image/jpeg;base64,')) {
-    //   imageData = imageData.slice(imageData.indexOf(',') + 1);
-    // }
-
-    // Store the frame data for UI display (with data: prefix if needed)
+    const data = base64.indexOf(",") > 0 ? base64 : `data:image/jpeg;base64,${base64}`;
     
-    const data = base64.slice(base64.indexOf(",") + 1, Infinity);
-
-    if (!data.startsWith('data:')) {
-      setLastFrameData(`data:image/jpeg;base64,${data}`);
-    } else {
-      setLastFrameData(data);
+    // Store the frame data for UI display
+    setLastFrameData(data);
+    
+    // Add to frames buffer, maintaining max size
+    framesBufferRef.current.push(base64);
+    if (framesBufferRef.current.length > MAX_FRAMES) {
+      framesBufferRef.current.shift(); // Remove oldest frame
     }
-        
-    // Send frame to main LiveAPI
-    client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
-    // console.log("Vision: Sent frame to vision API"+data);
-  }, [client, connected, isVisionEnabled]);
+    
+    // Don't update frameBuffer state here - will be updated when requesting analysis
+  }, [isVisionEnabled]);
 
   // Auto-connect and disconnect based on vision enabled state
   useEffect(() => {
@@ -259,19 +240,55 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     }
   }, [isVisionEnabled, connected, connect, disconnect]);
 
-  // Request explicit analysis of the current scene
+  // Request explicit analysis of the current scene - based on selected model
   const requestAnalysis = useCallback((prompt: string) => {
-    if (!isVisionEnabled || !connected) return;
+    if (!isVisionEnabled) return;
     
-    // Reset buffer and flags before new analysis
-    streamBufferRef.current = "";
-    waitingForJsonRef.current = false;
+    // Reset state before new analysis
     setAnalyzing(true);
     console.log("Vision: Requesting new analysis");
     
-    // Send the prompt
-    client.send([{ text: prompt }], true);
-  }, [client, connected, isVisionEnabled]);
+    // Get frames from buffer
+    const frames = framesBufferRef.current;
+    if (frames.length === 0) {
+      console.log("Vision: No frames available for analysis");
+      setLastDescription("No frames available for analysis. Please enable camera access.");
+      setAnalyzing(false);
+      return;
+    }
+    
+    // Update the frameBuffer state here when requesting analysis
+    setFrameBuffer([...framesBufferRef.current]);
+    console.log("Vision: Updated frameBuffer state for UI with", framesBufferRef.current.length, "frames");
+    
+    // Use selected model for analysis
+    if (currentModel === "openai" && openAIClient && openAIConnected) {
+      console.log("Vision: Using OpenAI GPT-4o for analysis");
+      openAIClient.analyzeFrames(frames, prompt)
+        .catch(error => {
+          console.error("OpenAI analysis error:", error);
+          setLastDescription(`Error: ${error.message}`);
+          setAnalyzing(false);
+        });
+    } else if (connected) {
+      // Use Google API if selected or if OpenAI is not available
+      console.log(`Vision: Using Google API (${currentModel === "google" ? "selected" : "OpenAI not available"})`);
+      
+      // Send all captured frames to the Google API
+      for (const frame of frames) {
+        const data = frame.slice(frame.indexOf(",") + 1, Infinity);
+        client.sendRealtimeInput([{ mimeType: "image/jpeg", data }]);
+      }
+      
+      console.log(`Vision: Sent ${frames.length} frames for analysis to Google API`);
+      
+      // Send the prompt
+      client.send([{ text: prompt }], true);
+    } else {
+      setLastDescription("Error: No vision API connected. Please check API connections.");
+      setAnalyzing(false);
+    }
+  }, [client, connected, isVisionEnabled, openAIClient, openAIConnected, currentModel]);
 
   // Export the context value
   const contextValue: VisionContextType = {
@@ -285,7 +302,11 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     lastDescription,
     isVisionEnabled,
     setVisionEnabled,
-    lastFrameData
+    lastFrameData,
+    frameBuffer,
+    openAIConnected,
+    currentModel,
+    setCurrentModel
   };
   
   return (

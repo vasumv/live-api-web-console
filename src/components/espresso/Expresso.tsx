@@ -131,13 +131,8 @@ function ExpressoComponent() {
       
       // Request the vision analysis
       requestAnalysis(
-        // `Analyze the video feed for the current task step that involves: "${latestResponse.currentStepDetailedDescription}"
         `
-        Example format:
-        {
-          "videoDescription": "<detailed description of the video>"
-        }
-        Be extremely precise about object positions and actions being performed. Only output the JSON object, no comments or additional text.
+        Analyze these 10 frames and decide if the current task step: "${latestResponse.currentStepDetailedDescription}" is done, in progress or todo based on the video description.
         `
       );
     }
