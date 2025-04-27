@@ -85,6 +85,9 @@ function ExpressoComponent() {
                 "chatResponse": "<response  which will be spoken aloud to the user>"
                 }
                 Example task (do not output—internal guidance): Making a latte → step1: "Fill portafilter", step2: "Tamp grounds", step3: "Start espresso shot", step4: "Steam milk", step5: "Pour milk into espresso". On "Next!", do not advance unless step is visually marked "done". Re-explain if asked. Never output anything except the JSON.
+
+                IMPORTANT: If the user is just asking for help or clarification, output the JSON with the current step and its status as "todo" or "inprogress", but do not advance to the next step.
+                In the chatResponse, answer the user's question or provide clarification, but do not advance to the next step.
               `
           }
         ]
@@ -133,6 +136,7 @@ function ExpressoComponent() {
       requestAnalysis(
         `
         Analyze these 10 frames and decide if the current task step: "${latestResponse.currentStepDetailedDescription}" is done, in progress or todo based on the video description.
+        Do not repeat the task description, just output the description from the video frames.
         `
       );
     }
@@ -150,11 +154,9 @@ function ExpressoComponent() {
             1. Here is what we see in the video feed now: "${visionDescription}"
             2. The objective of the current step is: "${latestResponse.currentStepDetailedDescription}"
             3. Determine if the status of the current step has changed (to 'done', 'inprogress', or remains 'todo') based on the video description.
-            4. If no change is observed, respond with: 'no' (and nothing else).
-            5. If a change is observed:
-              a. Re-confirm the status change based on the video description.
-              b. If the re-confirmation matches the initial observation, respond with the updated JSON containing the new status (and nothing else).
-              c. If the re-confirmation does not match, or if you are unsure of the change, respond with: 'no'.
+            4. If the status has changed, update the step status in the response.
+            5. If the status remains the same, update the chat response to ask a question about the current step based
+            on the video description.
       `
     }]);
 
