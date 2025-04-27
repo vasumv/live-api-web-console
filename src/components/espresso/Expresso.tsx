@@ -154,11 +154,10 @@ function ExpressoComponent() {
   // Handle speaking the chatResponse
   useEffect(() => {
     if (latestResponse && latestResponse.chatResponse) {
-      // Only speak if the response has changed
-      if (lastSpokenResponseRef.current !== latestResponse.chatResponse) {
-        speak(latestResponse.chatResponse);
-        lastSpokenResponseRef.current = latestResponse.chatResponse;
-      }
+      // Always speak the latest response, even if it's the same as before
+      // This ensures we restart speech if interrupted by polling updates
+      speak(latestResponse.chatResponse);
+      lastSpokenResponseRef.current = latestResponse.chatResponse;
     }
   }, [latestResponse, speak]);
 
