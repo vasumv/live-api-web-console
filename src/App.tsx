@@ -60,28 +60,31 @@ function App() {
                 <SidePanel />
                 <main>
                   <div className="main-app-area">
+                    <div className="video-container">
+                      <video
+                        className={cn("stream", {
+                          hidden: !videoRef.current || !videoStream,
+                        })}
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted={true} /* Mute the video element so we don't hear the stream audio */
+                      />
+                      
+                      {/* Audio debug overlay (conditional) */}
+                      {showAudioDebug && videoStream && (
+                        <AudioStreamDebug stream={videoStream} />
+                      )}
+                      
+                      {/* Volume control overlay (conditional) */}
+                      {showVolumeControl && (
+                        <VolumeControl audioRecorder={audioRecorder} />
+                      )}
+                    </div>
+                    
                     {/* APP goes here */}
                     {/* <Altair /> */}
-                    <Expresso /> 
-                    <video
-                      className={cn("stream", {
-                        hidden: !videoRef.current || !videoStream,
-                      })}
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted={true} /* Mute the video element so we don't hear the stream audio */
-                    />
-                    
-                    {/* Audio debug overlay (conditional) */}
-                    {showAudioDebug && videoStream && (
-                      <AudioStreamDebug stream={videoStream} />
-                    )}
-                    
-                    {/* Volume control overlay (conditional) */}
-                    {showVolumeControl && (
-                      <VolumeControl audioRecorder={audioRecorder} />
-                    )}
+                    <Expresso />
                   </div>
 
                   <ControlTray

@@ -138,19 +138,23 @@ body {
     position: relative;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     justify-content: center;
     flex-grow: 1;
     gap: 1rem;
     max-width: 100%;
     overflow: hidden;
+    padding-left: 24px;
+    padding-top: 24px;
+    padding-right: 24px;
   }
 
   .main-app-area {
     display: flex;
+    flex-direction: row;
     flex: 1;
-    align-items: center;
-    justify-content: center;
+    width: 100%;
+    gap: 24px;
   }
 
   .function-call {
@@ -165,9 +169,27 @@ body {
 /* video player */
 .stream {
   flex-grow: 1;
-  max-width: 90%;
+  width: 100%; /* Take full width of container */
   border-radius: 32px;
   max-height: fit-content;
+}
+
+/* Video container */
+.video-container {
+  width: 30vw; /* Set to 30% of viewport width */
+  flex-shrink: 0; /* Prevent shrinking */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto; 
+  max-height: calc(100vh - 150px);
+}
+
+/* Task panel (Expresso component) should take up 80% of the viewport width */
+.expresso-container {
+  width: 70vw !important; /* Override the inline styles */
+  position: relative !important; /* Override absolute positioning */
+  right: auto !important; /* Reset right positioning */
 }
 
 /* Animation for the speaking indicator */
