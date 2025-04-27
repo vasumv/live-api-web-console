@@ -222,7 +222,7 @@ function ControlTray({
         }
       }
       if (connected) {
-        timeoutId = window.setTimeout(sendVideoFrame, 1000 / 5);
+        timeoutId = window.setTimeout(sendVideoFrame, 1000 / 2);
       }
     }
     if (connected && activeVideoStream !== null) {

@@ -4,6 +4,7 @@
  */
 
 import { EventEmitter } from 'eventemitter3';
+import { ResponseJson } from '../components/espresso/TaskPanel';
 
 // Define the events that this client will emit
 interface OpenAIVisionClientEventTypes {
@@ -37,7 +38,7 @@ export class OpenAIVisionClient extends EventEmitter<OpenAIVisionClientEventType
    * @param frames Array of base64-encoded image data
    * @param prompt Text prompt to send along with the images
    */
-  async analyzeFrames(frames: string[], prompt: string) {
+  async analyzeFrames(frames: string[], prompt: string, latestResponse: ResponseJson) {
     if (!frames.length) {
       this.emit('error', new Error('No frames provided for analysis'));
       return;
@@ -82,8 +83,37 @@ export class OpenAIVisionClient extends EventEmitter<OpenAIVisionClientEventType
             {
               role: "system",
               content: `
-                You are a helpful assistant that analyzes video frames and provides a description of the video feed.
-                Describe the 10 frames in detail and the action taking place in them.
+                You are a helpful assistant that analyzes video frames and first provides a description of the video feed.
+                Then, while a task is in progress: Use the video frames to track step status. 
+
+                This is the task & steps identified and the current state of the task:
+                ${JSON.stringify(latestResponse.steps)}
+
+                A step should go from "todo" → "inprogress" → "done", based solely on visual evidence—not user input. Skip "inprogress" only if completion is visually obvious. 
+                For each response, return: 
+                (a) steps: All steps and statuses, 
+                (b) currentStep: First step with status "todo" or "inprogress", 
+                (c) currentStepDetailedDescription: Actionable guidance for that step,
+                (d) currentStepExplanation: 2 lines - In the first line describe the video description in great detail espcially covering objects/instruments and actions that are relavant to the task. In the second line explain how the video confirms the current status ENSURE THIS IS ACCURATE AND CONSISTENT WITH THE VIDEO, while deciding the status of the step your goal is to avoid false positives at all costs,
+                (e) chatResponse: a friendly response that would be an appropriate response to the user's actions, remember this will be spoken aloud, try to refer to the objects and thir palcement (left, right, top, bottom or prerfeably relative to other objects) in the video feed as much as possible, use the objects in the video feed to guide the user through the steps.
+                
+                Output only the JSON object—never plain text.
+                JSON response format (always output, no extra text):
+                {
+                "steps": {
+                    "step1": { "text": "<label>", "status": "todo" },
+                    "step2": { "text": "<label>", "status": "todo" }
+                },
+                "currentStep": "step1",
+                "currentStepDetailedDescription": "<detailed instructions>",
+                "currentStepExplanation": "<based on video explain why you chose the status>",
+                "chatResponse": "<response  which will be spoken aloud to the user>",
+                "speakResponse": <true/false>,
+                "videoDescription": "<description of the video frames>"
+                }
+                Example task (do not output—internal guidance): Making a latte → step1: "Fill portafilter", step2: "Tamp grounds", step3: "Start espresso shot", step4: "Steam milk", step5: "Pour milk into espresso". On "Next!", do not advance unless step is visually marked "done". Re-explain if asked. Never output anything except the JSON.
+
+                If you want to respond to the user or remind them to do something, set the speakResponse field to true.
               `
             },
             {

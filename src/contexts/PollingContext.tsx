@@ -26,7 +26,7 @@ interface PollingContextType {
 const PollingContext = createContext<PollingContextType | undefined>(undefined);
 
 export function PollingProvider({ children }: { children: ReactNode }) {
-  const [isPollingEnabled, setIsPollingEnabled] = useState<boolean>(false);
+  const [isPollingEnabled, setIsPollingEnabled] = useState<boolean>(true);
   const [pollingInterval, setPollingInterval] = useState<number>(7);
 
   return (

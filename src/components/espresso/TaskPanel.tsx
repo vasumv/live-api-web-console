@@ -28,7 +28,9 @@ export interface ResponseJson {
   currentStep: string;
   currentStepDetailedDescription: string;
   chatResponse: string;
+  speakResponse: boolean;
   currentStepExplanation: string;
+  videoDescription: string;
 }
 
 // Dark mode color palette
@@ -69,7 +71,7 @@ function TaskPanelComponent({
   const [showModelSelector, setShowModelSelector] = useState<boolean>(false);
   const { speaking, isSpeechEnabled, setSpeechEnabled } = useSpeech();
   const { 
-    lastDescription, 
+    lastResponse, 
     analyzing, 
     frameBuffer, 
     openAIConnected, 
@@ -481,7 +483,7 @@ function TaskPanelComponent({
             )}
             
             {/* Vision description section */}
-            {lastDescription && (
+            {latestResponse.videoDescription && (
               <div style={{ marginTop: "8px" }}>
                 <div 
                   onClick={() => setIsVisionDescriptionExpanded(!isVisionDescriptionExpanded)}
@@ -515,7 +517,7 @@ function TaskPanelComponent({
                     color: colors.primary,
                     opacity: 0.9
                   }}>
-                    {lastDescription}
+                    {latestResponse.videoDescription}
                   </div>
                 )}
               </div>

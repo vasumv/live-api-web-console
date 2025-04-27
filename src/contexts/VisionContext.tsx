@@ -5,6 +5,7 @@
 import { createContext, FC, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { MultimodalLiveClient } from "../lib/multimodal-live-client";
 import { OpenAIVisionClient } from "../lib/openai-vision-client";
+import { ResponseJson } from "../components/espresso/TaskPanel";
 
 // Define the shape of our context
 interface VisionContextType {
@@ -14,8 +15,8 @@ interface VisionContextType {
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
   sendFrame: (imageData: string) => void;
-  requestAnalysis: (prompt: string) => void;
-  lastDescription: string | null;
+  requestAnalysis: (prompt: string, latestResponse: ResponseJson) => void;
+  lastResponse: string | null;
   isVisionEnabled: boolean;
   setVisionEnabled: (enabled: boolean) => void;
   lastFrameData: string | null;
@@ -68,7 +69,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
   const [connected, setConnected] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [isVisionEnabled, setVisionEnabled] = useState(true);
-  const [lastDescription, setLastDescription] = useState<string | null>(null);
+  const [lastResponse, setLastResponse] = useState<string | null>(null);
   const [lastFrameData, setLastFrameData] = useState<string | null>(null);
   
   // Store the latest 10 frames
@@ -93,7 +94,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
           
           // If Google isn't connected yet, set a message
           if (!connected) {
-            setLastDescription("OpenAI GPT-4o connected successfully! Request analysis to see results.");
+            setLastResponse("OpenAI GPT-4o connected successfully! Request analysis to see results.");
           }
         } else {
           // If OpenAI fails but it's the selected model, switch to Google
@@ -124,14 +125,14 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     const onResponse = (data: any) => {
       console.log('OpenAI Vision response:', data);
       if (data.videoDescription) {
-        setLastDescription(data.videoDescription);
+        setLastResponse(data.videoDescription);
         setAnalyzing(false);
       }
     };
     
     const onError = (error: Error) => {
       console.error('OpenAI Vision error:', error);
-      setLastDescription(`Error analyzing frames: ${error.message}`);
+      setLastResponse(`Error analyzing frames: ${error.message}`);
       setAnalyzing(false);
     };
     
@@ -241,7 +242,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
   }, [isVisionEnabled, connected, connect, disconnect]);
 
   // Request explicit analysis of the current scene - based on selected model
-  const requestAnalysis = useCallback((prompt: string) => {
+  const requestAnalysis = useCallback((prompt: string, latestResponse: ResponseJson) => {
     if (!isVisionEnabled) return;
     
     // Reset state before new analysis
@@ -252,7 +253,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     const frames = framesBufferRef.current;
     if (frames.length === 0) {
       console.log("Vision: No frames available for analysis");
-      setLastDescription("No frames available for analysis. Please enable camera access.");
+      setLastResponse("No frames available for analysis. Please enable camera access.");
       setAnalyzing(false);
       return;
     }
@@ -264,10 +265,10 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     // Use selected model for analysis
     if (currentModel === "openai" && openAIClient && openAIConnected) {
       console.log("Vision: Using OpenAI GPT-4o for analysis");
-      openAIClient.analyzeFrames(frames, prompt)
+      openAIClient.analyzeFrames(frames, prompt, latestResponse)
         .catch(error => {
           console.error("OpenAI analysis error:", error);
-          setLastDescription(`Error: ${error.message}`);
+          setLastResponse(`Error: ${error.message}`);
           setAnalyzing(false);
         });
     } else if (connected) {
@@ -285,7 +286,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
       // Send the prompt
       client.send([{ text: prompt }], true);
     } else {
-      setLastDescription("Error: No vision API connected. Please check API connections.");
+      setLastResponse("Error: No vision API connected. Please check API connections.");
       setAnalyzing(false);
     }
   }, [client, connected, isVisionEnabled, openAIClient, openAIConnected, currentModel]);
@@ -299,7 +300,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     disconnect,
     sendFrame,
     requestAnalysis,
-    lastDescription,
+    lastResponse,
     isVisionEnabled,
     setVisionEnabled,
     lastFrameData,

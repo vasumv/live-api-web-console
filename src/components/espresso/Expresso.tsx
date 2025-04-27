@@ -24,6 +24,7 @@ import { TaskPanel, ResponseJson } from "./TaskPanel";
 
 function ExpressoComponent() {
   const [latestResponse, setLatestResponse] = useState<ResponseJson | null>(null);
+  const [responseHistory, setResponseHistory] = useState<ResponseJson[]>([]);
   const [latestRawText, setLatestRawText] = useState<string>("");
   const [isPolling, setIsPolling] = useState<boolean>(false);
   const pollingTimerRef = useRef<number | null>(null);
@@ -34,7 +35,7 @@ function ExpressoComponent() {
   const { speak, connected: speechConnected, connect: connectSpeech } = useSpeech();
   const { 
     requestAnalysis, 
-    lastDescription, 
+    lastResponse, 
     connected: visionConnected, 
     connect: connectVision,
     analyzing: visionAnalyzing
@@ -82,7 +83,8 @@ function ExpressoComponent() {
                 "currentStep": "step1",
                 "currentStepDetailedDescription": "<detailed instructions>",
                 "currentStepExplanation": "<based on video explain why you chose the status>",
-                "chatResponse": "<response  which will be spoken aloud to the user>"
+                "chatResponse": "<response  which will be spoken aloud to the user>",
+                "videoDescription": "<description of the video frames>"
                 }
                 Example task (do not output—internal guidance): Making a latte → step1: "Fill portafilter", step2: "Tamp grounds", step3: "Start espresso shot", step4: "Steam milk", step5: "Pour milk into espresso". On "Next!", do not advance unless step is visually marked "done". Re-explain if asked. Never output anything except the JSON.
 
@@ -112,6 +114,13 @@ function ExpressoComponent() {
     }
   }, [isPollingEnabled, visionConnected, speechConnected, connectVision, connectSpeech]);
 
+  // Update responseHistory when latestResponse changes
+  useEffect(() => {
+    if (latestResponse) {
+      setResponseHistory(prev => [...prev, latestResponse]);
+    }
+  }, [latestResponse]);
+
   // Function to check status and poll for updates
   const pollForStatusUpdate = useCallback(() => {
     if (!latestResponse || !client || !isPollingEnabled) {
@@ -132,39 +141,58 @@ function ExpressoComponent() {
       // Update the last request time
       lastVisionRequestTimeRef.current = now;
       
-      // Request the vision analysis
+      // Request the vision analysis with response history
       requestAnalysis(
         `
-        Analyze these 10 frames and decide if the current task step: "${latestResponse.currentStepDetailedDescription}" is done, in progress or todo based on the video description.
-        Do not repeat the task description, just output the description from the video frames.
-        `
+
+
+        Previous responses history:
+        ${JSON.stringify(responseHistory.slice(-5))}
+
+        First, analyze the video frames and give a detailed description of what the user is doing in the video.
+        Next, determine if the current step is done, in progress or todo based on the video description. If the user has completed the step, set the status to "done"
+        and update the current step to the next step. If the user is still working on the step, set the status to "inprogress". If the user is not working on the current step,
+        remind the user to do it in the chatResponse.
+
+        Respond in the JSON format provided.
+        `,
+        latestResponse
       );
     }
     
     // Use the vision description if available, otherwise use a placeholder
     // Make sure to trim and clean up any JSON artifacts that might remain
-    const visionDescription = lastDescription 
-      ? lastDescription.replace(/```json|```/g, '').trim() 
+    const visionDescription = lastResponse 
+      ? lastResponse.replace(/```json|```/g, '').trim() 
       : "No detailed visual information available yet";
     
+    // Try to parse the vision description as JSON and update latestResponse if successful
+    if (lastResponse) {
+      try {
+        const cleanedVisionDescription = lastResponse.replace(/```json|```/g, '').trim();
+        const parsedVisionJson = JSON.parse(cleanedVisionDescription);
+        if (parsedVisionJson && typeof parsedVisionJson === 'object') {
+          setLatestResponse(
+            parsedVisionJson
+          );
+        }
+      } catch (error) {
+        console.error("Error parsing vision JSON response:", error);
+      }
+    }
+
     // Send a request to check for status updates
     client.send([{ 
-      text: `
-          Instructions:
-            1. Here is what we see in the video feed now: "${visionDescription}"
-            2. The objective of the current step is: "${latestResponse.currentStepDetailedDescription}"
-            3. Determine if the status of the current step has changed (to 'done', 'inprogress', or remains 'todo') based on the video description.
-            4. If the status has changed, update the step status in the response.
-            5. If the status remains the same, update the chat response to ask a question about the current step based
-            on the video description.
+      text: `Just keep this in mind: "${visionDescription}"
+            Here is the state of the task: "${JSON.stringify(latestResponse)}"
       `
-    }]);
+    }],false);
 
     // Reset polling flag after a brief delay to show the indicator
     setTimeout(() => {
       setIsPolling(false);
     }, 1000);
-  }, [client, latestResponse, isPollingEnabled, visionConnected, visionAnalyzing, requestAnalysis, lastDescription]);
+  }, [client, latestResponse, isPollingEnabled, visionConnected, visionAnalyzing, requestAnalysis, lastResponse, responseHistory]);
 
   // Setup or clear polling timer when polling interval or enabled state changes
   useEffect(() => {
@@ -198,7 +226,9 @@ function ExpressoComponent() {
     if (latestResponse && latestResponse.chatResponse) {
       // Always speak the latest response, even if it's the same as before
       // This ensures we restart speech if interrupted by polling updates
-      speak(latestResponse.chatResponse);
+      if (latestResponse.speakResponse) {
+        speak(latestResponse.chatResponse);
+      }
       lastSpokenResponseRef.current = latestResponse.chatResponse;
     }
   }, [latestResponse, speak]);
