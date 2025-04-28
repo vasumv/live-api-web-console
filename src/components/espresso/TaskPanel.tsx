@@ -29,6 +29,7 @@ export interface ResponseJson {
   currentStepDetailedDescription: string;
   chatResponse: string;
   currentStepExplanation: string;
+  taskTitle?: string;
 }
 
 // Dark mode color palette
@@ -132,7 +133,15 @@ function TaskPanelComponent({
         borderBottom: `1px solid ${colors.border}`,
         padding: "12px 16px"
       }}>
-        <h2 style={{ margin: 0, fontWeight: 500, fontSize: "18px", color: colors.onBackground }}>Task Assistant</h2>
+        <div>
+          
+          {latestResponse?.taskTitle && (
+            <h2 style={{ margin: 0, fontWeight: 500, fontSize: "18px", color: colors.onBackground }}>
+              {latestResponse.taskTitle}
+            </h2>
+          )}
+          <div style={{ fontSize: "14px", color: colors.onSurfaceVariant, marginTop: "4px" }}>Task Assistant</div>
+        </div>
         <div style={{ display: "flex", gap: "12px" }}>
           {/* Model Selector Button */}
           <div 

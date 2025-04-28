@@ -33,15 +33,15 @@ const VolumeControl: React.FC<VolumeControlProps> = ({ audioRecorder }) => {
 
   const controlStyle: React.CSSProperties = {
     position: 'absolute',
-    top: '20px',
-    right: '20px',
+    bottom: '10px',
+    left: '10px',
     background: 'var(--Neutral-15)',
     border: '1px solid var(--Neutral-30)',
     borderRadius: '8px',
     padding: '12px',
     color: 'var(--Neutral-90)',
     fontSize: '14px',
-    zIndex: 100,
+    zIndex: 500,
     width: '200px',
     display: 'flex',
     flexDirection: 'column',

@@ -92,29 +92,11 @@ function App() {
                     supportsVideo={true}
                     onVideoStreamChange={setVideoStream}
                     audioRecorder={audioRecorder}
-                  >
-                    {/* Audio debug toggle button */}
-                    <button 
-                      className="action-button"
-                      onClick={() => setShowAudioDebug(!showAudioDebug)}
-                      title={showAudioDebug ? "Hide audio debug" : "Show audio debug"}
-                    >
-                      <span className="material-symbols-outlined">
-                        {showAudioDebug ? "hearing" : "hearing_disabled"}
-                      </span>
-                    </button>
-                    
-                    {/* Volume control toggle button */}
-                    <button 
-                      className="action-button"
-                      onClick={() => setShowVolumeControl(!showVolumeControl)}
-                      title={showVolumeControl ? "Hide volume control" : "Show volume control"}
-                    >
-                      <span className="material-symbols-outlined">
-                        {showVolumeControl ? "volume_up" : "volume_off"}
-                      </span>
-                    </button>
-                  </ControlTray>
+                    showAudioDebug={showAudioDebug}
+                    onShowAudioDebugChange={setShowAudioDebug}
+                    showVolumeControl={showVolumeControl}
+                    onShowVolumeControlChange={setShowVolumeControl}
+                  />
                 </main>
               </div>
             </VisionProvider>

@@ -29,6 +29,13 @@ export type SettingsPanelProps = {
   onPollingIntervalChange: (interval: number) => void;
   isPollingEnabled: boolean;
   onPollingEnabledChange: (enabled: boolean) => void;
+  // Audio and debug settings
+  showAudioDebug: boolean;
+  onShowAudioDebugChange: (show: boolean) => void;
+  showVolumeControl: boolean;
+  onShowVolumeControlChange: (show: boolean) => void;
+  muted: boolean;
+  onMutedChange: (muted: boolean) => void;
 };
 
 function SettingsPanel({
@@ -39,7 +46,14 @@ function SettingsPanel({
   pollingInterval,
   onPollingIntervalChange,
   isPollingEnabled,
-  onPollingEnabledChange
+  onPollingEnabledChange,
+  // Audio and debug settings
+  showAudioDebug,
+  onShowAudioDebugChange,
+  showVolumeControl,
+  onShowVolumeControlChange,
+  muted,
+  onMutedChange
 }: SettingsPanelProps) {
   // Close on escape key
   const handleKeyDown = useCallback(
@@ -83,6 +97,7 @@ function SettingsPanel({
         </div>
         <div className="settings-content">
           <div className="setting-group">
+            <h3 className="setting-section-title">Video Settings</h3>
             <label htmlFor="video-source">Video Stream Source:</label>
             <select
               id="video-source"
@@ -98,6 +113,30 @@ function SettingsPanel({
           </div>
           
           <div className="setting-group">
+            <h3 className="setting-section-title">Debug Panel Settings</h3>
+            <div className="setting-row">
+              <label htmlFor="show-volume-control" className="row-label">Show Input Volume Control:</label>
+              <input
+                id="show-volume-control"
+                type="checkbox"
+                checked={showVolumeControl}
+                onChange={(e) => onShowVolumeControlChange(e.target.checked)}
+              />
+            </div>
+            
+            <div className="setting-row">
+              <label htmlFor="show-audio-debug" className="row-label">Show Audio Debug:</label>
+              <input
+                id="show-audio-debug"
+                type="checkbox"
+                checked={showAudioDebug}
+                onChange={(e) => onShowAudioDebugChange(e.target.checked)}
+              />
+            </div>
+          </div>
+          
+          <div className="setting-group">
+            <h3 className="setting-section-title">Status Update Settings</h3>
             <div className="setting-row">
               <label htmlFor="polling-enabled" className="row-label">Auto-check status updates:</label>
               <input

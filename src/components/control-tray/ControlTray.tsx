@@ -35,6 +35,11 @@ export type ControlTrayProps = {
   supportsVideo: boolean;
   onVideoStreamChange?: (stream: MediaStream | null) => void;
   audioRecorder?: AudioRecorder | null;
+  // Audio and debug settings
+  showAudioDebug: boolean;
+  onShowAudioDebugChange: (show: boolean) => void;
+  showVolumeControl: boolean;
+  onShowVolumeControlChange: (show: boolean) => void;
 };
 
 type MediaStreamButtonProps = {
@@ -67,6 +72,11 @@ function ControlTray({
   onVideoStreamChange = () => {},
   supportsVideo,
   audioRecorder: providedAudioRecorder = null,
+  // Audio and debug settings
+  showAudioDebug,
+  onShowAudioDebugChange,
+  showVolumeControl,
+  onShowVolumeControlChange,
 }: ControlTrayProps) {
   // Initialize the video streams
   const whepStream = useWhepStream();
@@ -350,17 +360,6 @@ function ControlTray({
               >
                 <span className="material-symbols-outlined">settings</span>
               </button>
-              
-              {/* Polling toggle - only new button added */}
-              <button
-                className={cn("action-button", { active: isPollingEnabled })}
-                onClick={() => setIsPollingEnabled(!isPollingEnabled)}
-                title={isPollingEnabled ? "Disable polling" : "Enable polling"}
-              >
-                <span className="material-symbols-outlined">
-                  {isPollingEnabled ? "sync" : "sync_disabled"}
-                </span>
-              </button>
             </>
           )}
           {children}
@@ -406,6 +405,12 @@ function ControlTray({
         onPollingIntervalChange={setPollingInterval}
         isPollingEnabled={isPollingEnabled}
         onPollingEnabledChange={setIsPollingEnabled}
+        muted={muted}
+        onMutedChange={setMuted}
+        showAudioDebug={showAudioDebug}
+        onShowAudioDebugChange={onShowAudioDebugChange}
+        showVolumeControl={showVolumeControl}
+        onShowVolumeControlChange={onShowVolumeControlChange}
       />
     </>
   );

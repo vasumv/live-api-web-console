@@ -110,16 +110,16 @@ const AudioStreamDebug: React.FC<AudioStreamDebugProps> = ({ stream }) => {
 
   const debugStyle: React.CSSProperties = {
     position: 'absolute',
-    bottom: '120px',
-    right: '20px',
+    bottom: '100px',
+    left: '10px',
     background: '#1c1f21',
     border: '1px solid #404547',
     borderRadius: '8px',
     padding: '12px',
     color: '#e1e2e3',
     fontSize: '14px',
-    zIndex: 100,
-    maxWidth: '300px'
+    zIndex: 500,
+    maxWidth: '200px'
   };
 
   const headingStyle: React.CSSProperties = {
@@ -163,7 +163,7 @@ const AudioStreamDebug: React.FC<AudioStreamDebugProps> = ({ stream }) => {
             <div>
               {audioInfo.tracks.map(track => (
                 <div key={track.id} style={trackItemStyle}>
-                  <div><strong>Label:</strong> {track.label}</div>
+                  <div><strong>Label:</strong> {track.label.slice(0, 10) + "..."}</div>
                   <div><strong>Enabled:</strong> {track.enabled ? 'Yes' : 'No'}</div>
                   <div><strong>Muted:</strong> {track.muted ? 'Yes' : 'No'}</div>
                   <div><strong>Ready State:</strong> {track.readyState}</div>

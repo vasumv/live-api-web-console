@@ -55,6 +55,15 @@
       &:last-child {
         margin-bottom: 0;
       }
+      
+      .setting-section-title {
+        font-size: 16px;
+        font-weight: 500;
+        color: var(--Blue-500, #8ab4f8);
+        margin: 0 0 16px 0;
+        padding-bottom: 8px;
+        border-bottom: 1px solid var(--Neutral-20, rgba(232, 234, 237, 0.12));
+      }
 
       .setting-row {
         display: flex;
@@ -67,6 +76,13 @@
           font-weight: 400;
           font-size: 16px;
           color: var(--Neutral-70, #e8eaed);
+        }
+        
+        input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+          cursor: pointer;
+          accent-color: var(--Blue-500, #8ab4f8);
         }
       }
 
