@@ -94,11 +94,12 @@ function ControlTray({
   const audioStartedRef = useRef<boolean>(false);
   
   // Get vision context to send frames
-  const { sendFrame, connected: visionConnected } = useVision();
+  const { sendFrame, connected: visionConnected, maxFrames, setMaxFrames } = useVision();
   
   // Settings state
   const [showSettings, setShowSettings] = useState(false);
   const [activeVideoSource, setActiveVideoSource] = useState<VideoSource | null>(null);
+  const [frameRate, setFrameRate] = useState<number>(5);
   // Use polling context instead of local state
   const { pollingInterval, isPollingEnabled, setPollingInterval, setIsPollingEnabled } = usePolling();
 
@@ -117,6 +118,15 @@ function ControlTray({
       `${Math.max(5, Math.min(inVolume * 200, 8))}px`,
     );
   }, [inVolume]);
+
+  // Validate frame rate
+  useEffect(() => {
+    if (frameRate < 1) {
+      setFrameRate(1);
+    } else if (frameRate > 30) {
+      setFrameRate(30);
+    }
+  }, [frameRate]);
 
   // Main audio streaming effect
   useEffect(() => {
@@ -232,7 +242,7 @@ function ControlTray({
         }
       }
       if (connected) {
-        timeoutId = window.setTimeout(sendVideoFrame, 1000 / 5);
+        timeoutId = window.setTimeout(sendVideoFrame, 1000 / frameRate);
       }
     }
     if (connected && activeVideoStream !== null) {
@@ -241,7 +251,7 @@ function ControlTray({
     return () => {
       clearTimeout(timeoutId);
     };
-  }, [connected, activeVideoStream, client, videoRef, visionConnected, isPollingEnabled, sendFrame]);
+  }, [connected, activeVideoStream, client, videoRef, visionConnected, isPollingEnabled, sendFrame, frameRate]);
 
   //handler for swapping from one video-stream to the next
   const changeStreams = (next?: UseMediaStreamResult) => async () => {
@@ -405,6 +415,10 @@ function ControlTray({
         onPollingIntervalChange={setPollingInterval}
         isPollingEnabled={isPollingEnabled}
         onPollingEnabledChange={setIsPollingEnabled}
+        frameRate={frameRate}
+        onFrameRateChange={setFrameRate}
+        maxFrames={maxFrames}
+        onMaxFramesChange={setMaxFrames}
         muted={muted}
         onMutedChange={setMuted}
         showAudioDebug={showAudioDebug}

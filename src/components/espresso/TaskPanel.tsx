@@ -33,19 +33,36 @@ export interface ResponseJson {
 }
 
 // Dark mode color palette
+// export const colors = {
+//   background: '#202124',
+//   surface: '#2a2b2e',
+//   surfaceVariant: '#35363a',
+//   primary: '#8ab4f8',
+//   primaryDark: '#669df6',
+//   onBackground: '#e8eaed',
+//   onSurface: '#bdc1c6',
+//   onSurfaceVariant: '#9aa0a6',
+//   success: '#81c995',
+//   border: 'rgba(232, 234, 237, 0.12)',
+//   shadow: 'rgba(0, 0, 0, 0.3)',
+//   overlay: 'rgba(32, 33, 36, 0.85)',
+// };
+
 export const colors = {
-  background: '#202124',
-  surface: '#2a2b2e',
-  surfaceVariant: '#35363a',
-  primary: '#8ab4f8',
-  primaryDark: '#669df6',
-  onBackground: '#e8eaed',
-  onSurface: '#bdc1c6',
-  onSurfaceVariant: '#9aa0a6',
-  success: '#81c995',
-  border: 'rgba(232, 234, 237, 0.12)',
-  shadow: 'rgba(0, 0, 0, 0.3)',
-  overlay: 'rgba(32, 33, 36, 0.85)',
+  background: '#211D1B', // Dark brown background
+  surface: '#2D2520', // Darker espresso surface
+  surfaceVariant: '#3A2E25', // Richer brown surface variant
+  primary: '#C87941', // Richer, warmer brown
+  primaryDark: '#8B4513', // Classic saddlebrown
+  onBackground: '#E8D9C9', // Warm cream text color
+  onSurface: '#D2BEA9', // Light brown text
+  onSurfaceVariant: '#BEA68F', // Muted brown text
+  success: '#8BC176', // Slightly warmer green
+  border: 'rgba(226, 215, 201, 0.12)', // Warmer border
+  shadow: 'rgba(20, 12, 5, 0.3)', // Brown-tinted shadow
+  overlay: 'rgba(33, 29, 27, 0.85)', // Brown overlay
+  accent: '#E6C095', // Creamy latte color
+  accentDark: '#D2A76A', // Caramel color
 };
 
 interface TaskPanelProps {
@@ -67,15 +84,13 @@ function TaskPanelComponent({
   const [isVisionDescriptionExpanded, setIsVisionDescriptionExpanded] = useState<boolean>(true);
   const [isVisionFrameExpanded, setIsVisionFrameExpanded] = useState<boolean>(false);
   const [currentFrameIndex, setCurrentFrameIndex] = useState<number>(0);
-  const [showModelSelector, setShowModelSelector] = useState<boolean>(false);
+  const [showModeDropdown, setShowModeDropdown] = useState<boolean>(false);
+  const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState<boolean>(false);
   const { speaking, isSpeechEnabled, setSpeechEnabled } = useSpeech();
   const { 
     lastDescription, 
     analyzing, 
-    frameBuffer, 
-    openAIConnected, 
-    currentModel,
-    setCurrentModel 
+    frameBuffer
   } = useVision();
 
   // Auto-rotate frames only if there are frames
@@ -92,6 +107,20 @@ function TaskPanelComponent({
     
     return () => clearInterval(intervalId);
   }, [isVisionFrameExpanded, frameBuffer]);
+  
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!showModeDropdown) return;
+    
+    const handleOutsideClick = (e: MouseEvent) => {
+      if ((e.target as Element).closest('.mode-dropdown-container') === null) {
+        setShowModeDropdown(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showModeDropdown]);
   
   // Frame navigation handlers - only if frames are available
   const goToPrevFrame = useCallback(() => {
@@ -112,19 +141,31 @@ function TaskPanelComponent({
 
   return (
     <div className="expresso-container" style={{
-      fontFamily: "'Google Sans', Arial, sans-serif",
+      fontFamily: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif",
       color: colors.onBackground,
       position: "absolute",
       right: "16px",
       top: "0px",
       height: "calc(100vh - 150px)",
       overflowY: "auto",
-      backgroundColor: colors.overlay,
-      backdropFilter: "blur(10px)",
-      borderRadius: "12px",
-      boxShadow: `0 4px 12px ${colors.shadow}`,
-      zIndex: 100
+      backgroundColor: "transparent",
+      // backdropFilter: "blur(10px)",
+      borderRadius: "10px",
+      border: `1px solid ${colors.border}`,
+      // boxShadow: `0 4px 12px ${colors.shadow}`,
+      zIndex: 100,
+      letterSpacing: "0.01em"
     }}>
+      {/* Add pulse animation */}
+      <style>
+        {`
+          @keyframes pulse {
+            0% { opacity: 0.4; }
+            50% { opacity: 1; }
+            100% { opacity: 0.4; }
+          }
+        `}
+      </style>
       <div className="header" style={{
         display: "flex",
         justifyContent: "space-between",
@@ -136,37 +177,25 @@ function TaskPanelComponent({
         <div>
           
           {latestResponse?.taskTitle && (
-            <h2 style={{ margin: 0, fontWeight: 500, fontSize: "18px", color: colors.onBackground }}>
+            <h2 style={{ 
+              margin: 0, 
+              fontWeight: 500, 
+              fontSize: "24px", 
+              color: colors.onBackground,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.3
+            }}>
               {latestResponse.taskTitle}
             </h2>
           )}
-          <div style={{ fontSize: "14px", color: colors.onSurfaceVariant, marginTop: "4px" }}>Task Assistant</div>
+          <div style={{ 
+            fontSize: "17px", 
+            color: colors.onSurfaceVariant, 
+            marginTop: "4px",
+            fontWeight: 400
+          }}>Task Assistant</div>
         </div>
         <div style={{ display: "flex", gap: "12px" }}>
-          {/* Model Selector Button */}
-          <div 
-            onClick={() => setShowModelSelector(!showModelSelector)}
-            style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              color: currentModel === "openai" && openAIConnected 
-                ? colors.success 
-                : colors.onSurfaceVariant,
-              cursor: "pointer",
-              padding: "4px 8px",
-              borderRadius: "12px",
-              transition: "background-color 0.2s ease"
-            }}
-            title={`Current model: ${currentModel === "openai" ? "OpenAI GPT-4o" : "Google Gemini"}`}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24">
-              <path 
-                fill="currentColor" 
-                d="M9,22A1,1 0 0,1 8,21V18H4A2,2 0 0,1 2,16V4C2,2.89 2.9,2 4,2H20A2,2 0 0,1 22,4V16A2,2 0 0,1 20,18H13.9L10.2,21.71C10,21.9 9.75,22 9.5,22V22H9M10,16V19.08L13.08,16H20V4H4V16H10Z" 
-              />
-            </svg>
-          </div>
-          
           {/* Speech toggle button */}
           <div 
             onClick={() => setSpeechEnabled(!isSpeechEnabled)}
@@ -201,131 +230,176 @@ function TaskPanelComponent({
             )}
           </div>
           
-          {/* Polling indicator */}
+          {/* Explanation toggle button */}
           <div 
-            onClick={onTogglePolling}
+            onClick={() => setIsDebugPanelExpanded(!isDebugPanelExpanded)}
             style={{ 
               display: "flex", 
               alignItems: "center", 
-              color: isPolling ? colors.primary : 'rgba(170, 170, 170, 0.6)',
+              color: isDebugPanelExpanded ? colors.primary : 'rgba(170, 170, 170, 0.6)',
               cursor: "pointer",
               padding: "4px 8px",
               borderRadius: "12px",
               transition: "background-color 0.2s ease",
               position: "relative"
             }}
-            title={isPollingEnabled ? "Turn polling off" : "Turn polling on"}
+            title="Explanation"
           >
             <svg width="20" height="20" viewBox="0 0 24 24">
-              <path 
-                fill="currentColor" 
-                d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" 
-              />
+              <path fill="rgba(170, 170, 170, 0.6)" d="M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z" />
             </svg>
-            {!isPollingEnabled && (
+          </div>
+          
+          {/* Mode dropdown chip */}
+          <div className="mode-dropdown-container" style={{ position: "relative" }}>
+            <div 
+              onClick={() => setShowModeDropdown(!showModeDropdown)}
+              style={{ 
+                display: "flex", 
+                alignItems: "center",
+                color: isPolling ? colors.primary : colors.onSurfaceVariant,
+                cursor: "pointer",
+                padding: "6px 12px",
+                borderRadius: "10px",
+                border: `1px solid rgba(170, 170, 170, 0.2)`,
+                fontSize: "14px",
+                fontWeight: 500,
+                transition: "all 0.2s ease",
+                gap: "6px"
+              }}
+            >
+              {/* Mode icon - eye for proactive, dot for passive */}
+              {isPollingEnabled ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" style={{ 
+                  color: isPolling ? colors.primary : colors.onSurfaceVariant
+                }}>
+                  <path 
+                    fill="currentColor" 
+                    d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" 
+                  />
+                </svg>
+              ) : (
+                <div style={{
+                  width: "9px",
+                  height: "9px",
+                  borderRadius: "50%",
+                  backgroundColor: 'currentColor',
+                  marginLeft: "4px",
+                  marginRight: "4px"
+                }} />
+              )}
+              <span>{isPollingEnabled ? "Espresso Mode" : "Brewed Mode"}</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" style={{ 
+                transform: showModeDropdown ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s ease'
+              }}>
+                <path 
+                  fill="currentColor" 
+                  d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z" 
+                />
+              </svg>
+            </div>
+            
+            {/* Dropdown menu */}
+            {showModeDropdown && (
               <div style={{
                 position: "absolute",
-                width: "2px",
-                height: "24px",
-                backgroundColor: 'rgba(170, 170, 170, 0.6)',
-                transform: "rotate(45deg)",
-                left: "50%",
-                top: "7%"
-              }} />
+                top: "calc(100% + 4px)",
+                right: 0,
+                backgroundColor: colors.surface,
+                borderRadius: "8px",
+                boxShadow: "0 2px 10px rgba(0, 0, 0, 0.3)",
+                overflow: "hidden",
+                zIndex: 10,
+                width: "280px"
+              }}>
+                <div 
+                  onClick={() => {
+                    if (!isPollingEnabled) onTogglePolling();
+                    setShowModeDropdown(false);
+                  }}
+                  style={{
+                    padding: "12px 14px",
+                    fontSize: "14px",
+                    color: isPollingEnabled ? colors.primary : colors.onBackground,
+                    backgroundColor: isPollingEnabled ? 'rgba(138, 180, 248, 0.1)' : 'transparent',
+                    cursor: "pointer",
+                    fontWeight: isPollingEnabled ? 500 : 'normal',
+                    borderLeft: isPollingEnabled ? `2px solid ${colors.primary}` : '2px solid transparent',
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "8px"
+                  }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" style={{ 
+                    color: isPollingEnabled ? colors.primary : colors.onSurfaceVariant,
+                    marginTop: "2px",
+                    flexShrink: 0
+                  }}>
+                    <path 
+                      fill="currentColor" 
+                      d="M12,9A3,3 0 0,0 9,12A3,3 0 0,0 12,15A3,3 0 0,0 15,12A3,3 0 0,0 12,9M12,17A5,5 0 0,1 7,12A5,5 0 0,1 12,7A5,5 0 0,1 17,12A5,5 0 0,1 12,17M12,4.5C7,4.5 2.73,7.61 1,12C2.73,16.39 7,19.5 12,19.5C17,19.5 21.27,16.39 23,12C21.27,7.61 17,4.5 12,4.5Z" 
+                    />
+                  </svg>
+                  <div>
+                    <div style={{ fontWeight: isPollingEnabled ? 500 : 'normal' }}>Espresso Mode</div>
+                    <div style={{ 
+                      fontSize: "13px", 
+                      color: colors.onSurfaceVariant,
+                      marginTop: "2px", 
+                      lineHeight: "1.3",
+                      opacity: 0.8 
+                    }}>
+                      Proactively tracks and updates your progress, strong and fast, like an espresso shot.
+                    </div>
+                  </div>
+                </div>
+                <div 
+                  onClick={() => {
+                    if (isPollingEnabled) onTogglePolling();
+                    setShowModeDropdown(false);
+                  }}
+                  style={{
+                    padding: "12px 14px",
+                    fontSize: "14px",
+                    color: !isPollingEnabled ? colors.primary : colors.onBackground,
+                    backgroundColor: !isPollingEnabled ? 'rgba(138, 180, 248, 0.1)' : 'transparent',
+                    cursor: "pointer",
+                    fontWeight: !isPollingEnabled ? 500 : 'normal',
+                    borderLeft: !isPollingEnabled ? `2px solid ${colors.primary}` : '2px solid transparent',
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "8px"
+                  }}
+                >
+                  <div style={{
+                    width: "9px",
+                    height: "9px",
+                    borderRadius: "50%",
+                    backgroundColor: !isPollingEnabled ? colors.primary : colors.onSurfaceVariant,
+                    marginLeft: "4px",
+                    marginRight: "4px",
+                    marginTop: "6px",
+                    flexShrink: 0
+                  }} />
+                  <div>
+                    <div style={{ fontWeight: !isPollingEnabled ? 500 : 'normal' }}>Brewed Mode</div>
+                    <div style={{ 
+                      fontSize: "13px", 
+                      color: colors.onSurfaceVariant,
+                      marginTop: "2px", 
+                      lineHeight: "1.3",
+                      opacity: 0.8 
+                    }}>
+                      Guides and updates you on demand, deliberate like a slow-brewed coffee.
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         </div>
       </div>
-      
-      {/* Model Selector Panel */}
-      {showModelSelector && (
-        <div style={{
-          padding: "12px 16px",
-          borderBottom: `1px solid ${colors.border}`,
-          backgroundColor: colors.surface
-        }}>
-          <div style={{ marginBottom: "8px", color: colors.onBackground, fontSize: "14px" }}>
-            Select Vision Analysis Model:
-          </div>
-          
-          <div style={{ display: "flex", gap: "12px" }}>
-            {/* OpenAI Option */}
-            <div 
-              onClick={() => setCurrentModel("openai")}
-              style={{
-                padding: "8px 12px",
-                backgroundColor: currentModel === "openai" 
-                  ? `${colors.primary}22` 
-                  : colors.surfaceVariant,
-                border: `1px solid ${currentModel === "openai" ? colors.primary : colors.border}`,
-                borderRadius: "4px",
-                cursor: "pointer",
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px"
-              }}
-            >
-              <div style={{
-                width: "16px",
-                height: "16px",
-                borderRadius: "50%",
-                backgroundColor: openAIConnected ? colors.success : "gray",
-                flexShrink: 0
-              }} />
-              <div>
-                <div style={{ color: colors.onBackground, fontWeight: currentModel === "openai" ? 500 : 'normal' }}>
-                  OpenAI GPT-4o
-                </div>
-                <div style={{ fontSize: "12px", color: colors.onSurfaceVariant }}>
-                  {openAIConnected ? "Connected" : "Not connected"}
-                </div>
-              </div>
-            </div>
-            
-            {/* Google Option */}
-            <div 
-              onClick={() => setCurrentModel("google")}
-              style={{
-                padding: "8px 12px",
-                backgroundColor: currentModel === "google" 
-                  ? `${colors.primary}22` 
-                  : colors.surfaceVariant,
-                border: `1px solid ${currentModel === "google" ? colors.primary : colors.border}`,
-                borderRadius: "4px",
-                cursor: "pointer",
-                flex: 1,
-                display: "flex",
-                alignItems: "center",
-                gap: "8px"
-              }}
-            >
-              <div style={{
-                width: "16px",
-                height: "16px",
-                borderRadius: "50%",
-                backgroundColor: "rgb(66, 133, 244)",
-                flexShrink: 0
-              }} />
-              <div>
-                <div style={{ color: colors.onBackground, fontWeight: currentModel === "google" ? 500 : 'normal' }}>
-                  Google Gemini
-                </div>
-                <div style={{ fontSize: "12px", color: colors.onSurfaceVariant }}>
-                  Default model
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <p style={{ fontSize: "12px", color: colors.onSurfaceVariant, margin: "8px 0 0" }}>
-            {openAIConnected 
-              ? "OpenAI API key detected from environment variables." 
-              : "OpenAI API key not found or invalid. Add REACT_APP_OPENAI_API_KEY to your .env file."
-            }
-          </p>
-        </div>
-      )}
       
       {latestResponse ? (
         <div className="response-container" style={{
@@ -333,21 +407,24 @@ function TaskPanelComponent({
         }}>
           {/* Chat response bubble */}
           <div style={{
-            backgroundColor: colors.surfaceVariant,
+            backgroundColor: "transparent",
             borderRadius: "12px",
-            padding: "12px 16px",
-            marginBottom: "16px",
-            border: `1px solid ${colors.border}`,
-            fontSize: "14px",
-            lineHeight: "1.5",
+            padding: "18px 22px",
+            marginBottom: "24px",
+            // border: `1px solid ${colors.border}`,
+            fontSize: "18px",
+            lineHeight: "1.6",
             color: colors.onBackground,
-            position: "relative"
+            position: "relative",
+            // boxShadow: "0 4px 12px rgba(0, 0, 0, 0.25)",
+            fontWeight: 600,
+            transition: "all 0.3s ease"
           }}>
             {speaking && (
               <div style={{
                 position: "absolute",
-                top: "8px",
-                right: "8px",
+                top: "12px",
+                right: "12px",
                 width: "8px",
                 height: "8px",
                 borderRadius: "50%",
@@ -356,10 +433,184 @@ function TaskPanelComponent({
               }} />
             )}
             {latestResponse.chatResponse}
+          </div>
+          
+          {/* Two-column layout */}
+          <div style={{
+            display: "flex",
+            gap: "16px"
+          }}>
+            {/* Left column: Steps list */}
+            <div style={{
+              flex: "0 0 40%",
+              backgroundColor: "transparent",
+              borderRadius: "8px",
+              padding: "14px",
+              // border: `1px solid ${colors.border}`
+            }}>
+              <h3 style={{ 
+                margin: "0 0 10px 0", 
+                fontSize: "17px", 
+                color: colors.onSurfaceVariant,
+                fontWeight: 500,
+                textTransform: "uppercase",
+                letterSpacing: "0.03em"
+              }}>
+                Steps
+              </h3>
+              <div className="steps-list">
+                {Object.entries(latestResponse.steps).map(([stepKey, stepInfo]) => {
+                  const isCurrent = latestResponse.currentStep === stepKey;
+                  const status = stepInfo.status;
+                  
+                  return (
+                    <div 
+                      key={stepKey} 
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        padding: "8px 6px",
+                        borderRadius: "4px",
+                        marginBottom: "6px",
+                        backgroundColor: "transparent",
+                        transition: "all 0.2s ease",
+                        borderLeft: isCurrent ? `2px solid ${colors.primary}` : '2px solid transparent',
+                        transform: isCurrent ? 'translateX(4px)' : 'none',
+                        opacity: status === "done" ? 0.7 : 1
+                      }}
+                    >
+                      <div 
+                        style={{
+                          display: "flex",
+                          justifyContent: "center",
+                          alignItems: "center",
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "50%",
+                          marginRight: "8px",
+                          fontSize: "12px",
+                          flexShrink: 0,
+                          color: status === "done" ? colors.success : 
+                                status === "inprogress" ? colors.primary :
+                                colors.onSurfaceVariant,
+                          backgroundColor: status === "done" ? 'rgba(129, 201, 149, 0.15)' : 
+                                            status === "inprogress" ? colors.primary : 
+                                            'transparent',
+                          border: status === "todo" ? `1px solid ${colors.border}` : 'none',
+                          cursor: status !== "done" ? "pointer" : "default"
+                        }}
+                      >
+                        {status === "done" ? '✓' : 
+                        status === "inprogress" ? '•' : 
+                        ''}
+                      </div>
+                      <div style={{
+                        fontSize: "17px",
+                        lineHeight: 1.5,
+                        color: isCurrent ? colors.primary : 
+                              status === "done" ? colors.onBackground : 
+                              status === "inprogress" ? "#FFC107" : 
+                              colors.onSurface,
+                        fontWeight: isCurrent ? 600 : 400,
+                        opacity: status === "done" ? 0.87 : 1,
+                        letterSpacing: isCurrent ? "0.01em" : "normal",
+                        transition: "all 0.2s ease"
+                      }}>
+                        {stepInfo.text}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             
-            {/* Vision frame section */}
+            {/* Right column: Current step details */}
+            <div style={{
+              flex: "1",
+              backgroundColor: colors.surface,
+              borderRadius: "8px",
+              padding: "14px",
+              border: `1px solid ${colors.border}`
+            }}>
+              <h3 style={{ 
+                margin: "0 0 12px 0", 
+                fontSize: "17px", 
+                color: colors.primary,
+                fontWeight: 600,
+                letterSpacing: "0.01em",
+                textTransform: "uppercase"
+              }}>
+                {latestResponse.steps[latestResponse.currentStep]?.text}
+              </h3>
+              <p style={{ 
+                margin: 0, 
+                fontSize: "17px",
+                lineHeight: 1.6,
+                color: colors.onBackground
+              }}>
+                {latestResponse.currentStepDetailedDescription}
+              </p>
+            </div>
+          </div>
+          
+          {/* Debug Panel Content - positioned at bottom right of the viewport */}
+          {isDebugPanelExpanded && (
+            <div style={{
+              position: "fixed",
+              bottom: "60px",
+              right: "16px",
+              width: "500px",
+              maxHeight: "400px",
+              overflowY: "auto",
+              backgroundColor: 'rgba(42, 43, 46, 0.95)',
+              borderRadius: "10px",
+              padding: "16px",
+              border: `1px solid rgba(154, 160, 166, 0.2)`,
+              zIndex: 110,
+              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.3)",
+              backdropFilter: "blur(5px)",
+              fontFamily: "'Google Sans', 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif"
+            }}>
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "12px",
+                paddingBottom: "8px",
+                borderBottom: `1px solid rgba(154, 160, 166, 0.2)`
+              }}>
+                <h4 style={{ 
+                  margin: 0, 
+                  fontWeight: 500, 
+                  fontSize: "16px",
+                  color: colors.onBackground,
+                  letterSpacing: "0.01em"
+                }}>Explaination</h4>
+                <div 
+                  onClick={() => setIsDebugPanelExpanded(false)}
+                  style={{
+                    cursor: "pointer",
+                    opacity: 0.7,
+                    transition: "opacity 0.2s ease",
+                    borderRadius: "50%",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "24px",
+                    height: "24px"
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.7"; }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24">
+                    <path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Video Frames section */}
             {frameBuffer && frameBuffer.length > 0 && (
-              <div style={{ marginTop: "8px" }}>
+                <div style={{ marginBottom: "16px" }}>
                 <div 
                   onClick={() => setIsVisionFrameExpanded(!isVisionFrameExpanded)}
                   style={{
@@ -367,10 +618,11 @@ function TaskPanelComponent({
                     alignItems: "center",
                     cursor: "pointer",
                     userSelect: "none",
-                    fontSize: "12px",
+                      fontSize: "15px",
+                      fontWeight: 500,
                     color: colors.onSurfaceVariant,
-                    paddingTop: "8px",
-                    borderTop: `1px solid ${colors.border}`
+                      marginBottom: "8px",
+                      letterSpacing: "0.01em"
                   }}
                 >
                   <span style={{ 
@@ -490,7 +742,7 @@ function TaskPanelComponent({
             
             {/* Vision description section */}
             {lastDescription && (
-              <div style={{ marginTop: "8px" }}>
+                <div style={{ marginBottom: "16px" }}>
                 <div 
                   onClick={() => setIsVisionDescriptionExpanded(!isVisionDescriptionExpanded)}
                   style={{
@@ -498,10 +750,10 @@ function TaskPanelComponent({
                     alignItems: "center",
                     cursor: "pointer",
                     userSelect: "none",
-                    fontSize: "12px",
+                      fontSize: "15px",
+                      fontWeight: 500,
                     color: analyzing ? colors.primary : colors.onSurfaceVariant,
-                    paddingTop: "8px",
-                    borderTop: `1px solid ${colors.border}`
+                      letterSpacing: "0.01em"
                   }}
                 >
                   <span style={{ 
@@ -517,11 +769,13 @@ function TaskPanelComponent({
                 </div>
                 {isVisionDescriptionExpanded && (
                   <div style={{
-                    marginTop: "4px",
+                      marginTop: "8px",
                     paddingLeft: "16px",
-                    fontSize: "12px",
+                      fontSize: "14px",
                     color: colors.primary,
-                    opacity: 0.9
+                      opacity: 0.9,
+                      fontWeight: 400,
+                      lineHeight: 1.5
                   }}>
                     {lastDescription}
                   </div>
@@ -531,7 +785,7 @@ function TaskPanelComponent({
             
             {/* Explanation section */}
             {latestResponse.currentStepExplanation && (
-              <div style={{ marginTop: "8px" }}>
+                <div>
                 <div 
                   onClick={() => setIsExplanationExpanded(!isExplanationExpanded)}
                   style={{
@@ -539,10 +793,10 @@ function TaskPanelComponent({
                     alignItems: "center",
                     cursor: "pointer",
                     userSelect: "none",
-                    fontSize: "12px",
+                      fontSize: "15px",
+                      fontWeight: 500,
                     color: colors.onSurfaceVariant,
-                    paddingTop: "8px",
-                    borderTop: `1px solid ${colors.border}`
+                      letterSpacing: "0.01em"
                   }}
                 >
                   <span style={{ 
@@ -555,11 +809,13 @@ function TaskPanelComponent({
                 </div>
                 {isExplanationExpanded && (
                   <div style={{
-                    marginTop: "4px",
+                      marginTop: "8px",
                     paddingLeft: "16px",
-                    fontSize: "12px",
+                      fontSize: "14px",
                     color: colors.onSurfaceVariant,
-                    opacity: 0.6
+                      opacity: 0.9,
+                      fontWeight: 400,
+                      lineHeight: 1.5
                   }}>
                     {latestResponse.currentStepExplanation}
                   </div>
@@ -567,117 +823,7 @@ function TaskPanelComponent({
               </div>
             )}
           </div>
-          
-          {/* Two-column layout */}
-          <div style={{
-            display: "flex",
-            gap: "16px"
-          }}>
-            {/* Left column: Steps list */}
-            <div style={{
-              flex: "0 0 40%",
-              backgroundColor: colors.surface,
-              borderRadius: "8px",
-              padding: "12px",
-              border: `1px solid ${colors.border}`
-            }}>
-              <h3 style={{ 
-                margin: "0 0 8px 0", 
-                fontSize: "14px", 
-                color: colors.onSurfaceVariant,
-                fontWeight: 500,
-                textTransform: "uppercase",
-                letterSpacing: "0.5px"
-              }}>
-                Steps
-              </h3>
-              <div className="steps-list">
-                {Object.entries(latestResponse.steps).map(([stepKey, stepInfo]) => {
-                  const isCurrent = latestResponse.currentStep === stepKey;
-                  const status = stepInfo.status;
-                  
-                  return (
-                    <div 
-                      key={stepKey} 
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        padding: "8px 4px",
-                        borderRadius: "4px",
-                        marginBottom: "4px",
-                        backgroundColor: isCurrent ? 'rgba(138, 180, 248, 0.15)' : 'transparent',
-                        transition: "all 0.2s ease"
-                      }}
-                    >
-                      <div 
-                        style={{
-                          display: "flex",
-                          justifyContent: "center",
-                          alignItems: "center",
-                          width: "20px",
-                          height: "20px",
-                          borderRadius: "50%",
-                          marginRight: "8px",
-                          fontSize: "12px",
-                          flexShrink: 0,
-                          color: status === "done" ? colors.success : 
-                                status === "inprogress" ? colors.primary :
-                                colors.onSurfaceVariant,
-                          backgroundColor: status === "done" ? 'rgba(129, 201, 149, 0.15)' : 
-                                            status === "inprogress" ? colors.primary : 
-                                            'transparent',
-                          border: status === "todo" ? `1px solid ${colors.border}` : 'none',
-                          cursor: status !== "done" ? "pointer" : "default"
-                        }}
-                      >
-                        {status === "done" ? '✓' : 
-                        status === "inprogress" ? '•' : 
-                        ''}
-                      </div>
-                      <div style={{
-                        fontSize: "14px",
-                        lineHeight: 1.4,
-                        color: isCurrent ? colors.primary : 
-                              status === "done" ? colors.onBackground : 
-                              status === "inprogress" ? "#FFC107" : 
-                              colors.onSurface,
-                        fontWeight: isCurrent ? 500 : 'normal',
-                        opacity: status === "done" ? 0.87 : 1
-                      }}>
-                        {stepInfo.text}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-            
-            {/* Right column: Current step details */}
-            <div style={{
-              flex: "1",
-              backgroundColor: colors.surface,
-              borderRadius: "8px",
-              padding: "12px",
-              border: `1px solid ${colors.border}`
-            }}>
-              <h3 style={{ 
-                margin: "0 0 8px 0", 
-                fontSize: "14px", 
-                color: colors.primary,
-                fontWeight: 500
-              }}>
-                {latestResponse.steps[latestResponse.currentStep]?.text}
-              </h3>
-              <p style={{ 
-                margin: 0, 
-                fontSize: "14px",
-                lineHeight: 1.5,
-                color: colors.onBackground
-              }}>
-                {latestResponse.currentStepDetailedDescription}
-              </p>
-            </div>
-          </div>
+          )}
         </div>
       ) : (
         <div style={{
@@ -820,7 +966,40 @@ function TaskPanelComponent({
             </div>
           ) : (
             <div>
-              <p>Ask the assistant to help with a task, and I'll guide you through the steps.</p>
+              
+                <div style={{
+                  alignItems: "center",
+                  marginBottom: "16px",
+                  width: "100%",
+                  textAlign: "center",
+                  marginTop: "30%"
+                }}>
+                  <img 
+                    src="/favicon.ico" 
+                    alt="Espresso AI" 
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      marginRight: "12px"
+                    }}
+                  />
+                  <h3 style={{ 
+                    margin: 0, 
+                    fontWeight: 500, 
+                    fontSize: "22px", 
+                    color: colors.primary 
+                  }}>
+                    Espresso AI
+                  </h3>
+                </div>
+                <p style={{
+                  textAlign: "center",
+                  color: colors.onSurface,
+                  fontSize: "15px",
+                  lineHeight: "1.5"
+                }}>
+                  I'm your intelligent assistant ready to help with tasks. Ask me anything, and I'll guide you through it step by step.
+                </p>
               
               {/* Add frame display in initial state */}
               {frameBuffer && frameBuffer.length > 0 && (

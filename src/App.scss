@@ -28,32 +28,32 @@
 
   --font-family: "Space Mono", monospace;
 
-  /* */
-  --Neutral-00: #000;
-  --Neutral-5: #181a1b;
-  --Neutral-10: #1c1f21;
-  --Neutral-15: #232729;
-  --Neutral-20: #2a2f31;
-  --Neutral-30: #404547;
-  --Neutral-50: #707577;
-  --Neutral-60: #888d8f;
-  --Neutral-80: #c3c6c7;
-  --Neutral-90: #e1e2e3;
+  /* Brown-tinted neutrals */
+  --Neutral-00: #050302; /* Darker black with slight brown tint */
+  --Neutral-5: #0e0b09; /* Darker very dark brown */
+  --Neutral-10: #15110f; /* Darker brown */
+  --Neutral-15: #1a1612; /* Darker brown */
+  --Neutral-20: #201915; /* Darker espresso */
+  --Neutral-30: #2a221c; /* Darker rich brown */
+  --Neutral-50: #4d3f35; /* Darker medium brown */
+  --Neutral-60: #5e4c3e; /* Darker medium-light brown */
+  --Neutral-80: #8a7b6d; /* Darker light brown */
+  --Neutral-90: #b09b8a; /* Darker cream/beige */
 
   --Green-500: #0d9c53;
   --Green-700: #025022;
 
-  --Blue-500: #1f94ff;
-  --Blue-800: #0f3557;
+  --Blue-500: #5e4c3e;
+  --Blue-800: #b09b8a;
 
-  --Red-400: #ff9c7a;
-  --Red-500: #ff4600;
-  --Red-600: #e03c00;
-  --Red-700: #bd3000;
+  --Red-400: #2a221c;
+  --Red-500: #4d3f35;
+  --Red-600: #5e4c3e;
+  --Red-700: #b09b8a;
 }
 
 body {
-  font-family: "Space Mono", monospace;
+  font-family: "Gothic A1", sans-serif;
   background: var(--Neutral-30);
 }
 

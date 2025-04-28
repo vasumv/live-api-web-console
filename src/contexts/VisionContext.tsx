@@ -23,6 +23,8 @@ interface VisionContextType {
   openAIConnected: boolean;
   currentModel: "openai" | "google";
   setCurrentModel: (model: "openai" | "google") => void;
+  maxFrames: number;
+  setMaxFrames: (frames: number) => void;
 }
 
 // Create the context
@@ -74,7 +76,16 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
   // Store the latest 10 frames
   const framesBufferRef = useRef<string[]>([]);
   const [frameBuffer, setFrameBuffer] = useState<string[]>([]);
-  const MAX_FRAMES = 10;
+  const [maxFrames, setMaxFrames] = useState<number>(10);
+  
+  // Validate maxFrames
+  useEffect(() => {
+    if (maxFrames < 5) {
+      setMaxFrames(5);
+    } else if (maxFrames > 30) {
+      setMaxFrames(30);
+    }
+  }, [maxFrames]);
   
   // Test OpenAI connection when component mounts
   useEffect(() => {
@@ -224,12 +235,12 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     
     // Add to frames buffer, maintaining max size
     framesBufferRef.current.push(base64);
-    if (framesBufferRef.current.length > MAX_FRAMES) {
+    if (framesBufferRef.current.length > maxFrames) {
       framesBufferRef.current.shift(); // Remove oldest frame
     }
     
     // Don't update frameBuffer state here - will be updated when requesting analysis
-  }, [isVisionEnabled]);
+  }, [isVisionEnabled, maxFrames]);
 
   // Auto-connect and disconnect based on vision enabled state
   useEffect(() => {
@@ -306,7 +317,9 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     frameBuffer,
     openAIConnected,
     currentModel,
-    setCurrentModel
+    setCurrentModel,
+    maxFrames,
+    setMaxFrames
   };
   
   return (

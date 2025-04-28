@@ -23,6 +23,13 @@ import { useLoggerStore } from "../../lib/store-logger";
 import Logger, { LoggerFilterType } from "../logger/Logger";
 import "./side-panel.scss";
 
+// Extend window interface if not already defined
+declare global {
+  interface Window {
+    toggleSidePanel?: (isOpen?: boolean) => void;
+  }
+}
+
 const filterOptions = [
   { value: "conversations", label: "Conversations" },
   { value: "tools", label: "Tool Use" },
@@ -63,6 +70,16 @@ export default function SidePanel() {
     };
   }, [client, log]);
 
+  // Expose setOpen function to window for external control
+  useEffect(() => {
+    window.toggleSidePanel = (isOpen) => {
+      setOpen(typeof isOpen === "boolean" ? isOpen : !open);
+    };
+    return () => {
+      delete window.toggleSidePanel;
+    };
+  }, [open]);
+
   const handleSubmit = () => {
     client.send([{ text: textInput }]);
 
@@ -76,15 +93,10 @@ export default function SidePanel() {
     <div className={`side-panel ${open ? "open" : ""}`}>
       <header className="top">
         <h2>Console</h2>
-        {open ? (
+        
           <button className="opener" onClick={() => setOpen(false)}>
             <RiSidebarFoldLine color="#b4b8bb" />
           </button>
-        ) : (
-          <button className="opener" onClick={() => setOpen(true)}>
-            <RiSidebarUnfoldLine color="#b4b8bb" />
-          </button>
-        )}
       </header>
       <section className="indicators">
         <Select

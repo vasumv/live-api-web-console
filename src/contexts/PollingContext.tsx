@@ -27,7 +27,7 @@ const PollingContext = createContext<PollingContextType | undefined>(undefined);
 
 export function PollingProvider({ children }: { children: ReactNode }) {
   const [isPollingEnabled, setIsPollingEnabled] = useState<boolean>(false);
-  const [pollingInterval, setPollingInterval] = useState<number>(7);
+  const [pollingInterval, setPollingInterval] = useState<number>(5);
 
   return (
     <PollingContext.Provider 

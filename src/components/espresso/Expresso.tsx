@@ -57,7 +57,6 @@ function ExpressoComponent() {
             text: 
               `
                 You are a hands-on assistant that helps users complete real-world, physical tasks (e.g., espresso brewing, furniture assembly, bike repair, lab protocols). 
-                In this task you are helping the user drink from a can of coke.
                 When a new task is requested: 
                 (1) Break it into small, atomic steps ("step1", "step2", …). Be thorough and avoid bundling actions. First step should always be to locate the object/instrument that is required for the task.  
                 (2) Set all statuses to "todo". 

@@ -30,7 +30,7 @@
     }
   }
   background: var(--Neutral-00);
-  width: 40px; /* when closed */
+  width: 0; /* when closed */
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -49,6 +49,8 @@
   }
 
   &.open {
+    width: 400px;
+    
     .top {
       h2 {
         left: 0%;
@@ -97,6 +99,10 @@
   }
 
   &:not(.open) {
+    border-right: none;
+    width: 0;
+    overflow: hidden;
+    
     .side-panel-container {
       opacity: 0;
       display: none;
@@ -105,7 +111,7 @@
     }
 
     .indicators .streaming-indicator {
-      width: 30px;
+      width: 0;
       opacity: 0;
     }
 
@@ -117,6 +123,10 @@
       opacity: 0;
       display: none;
       transition: all 0.2s ease-in allow-discrete;
+    }
+    
+    .top {
+      display: none;
     }
   }
 

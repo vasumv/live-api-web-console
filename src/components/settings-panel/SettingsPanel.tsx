@@ -14,11 +14,20 @@
  * limitations under the License.
  */
 
-import { memo, useEffect, useCallback } from "react";
+import { memo, useEffect, useCallback, useState } from "react";
 import { createPortal } from "react-dom";
+import { useVision } from "../../contexts/VisionContext";
 import "./settings-panel.scss";
 
-export type VideoSource = "webcam" | "whep";
+// Video source types
+export type VideoSource = "webcam" | "whep" | null;
+
+// Extend window interface to include our toggleSidePanel function
+declare global {
+  interface Window {
+    toggleSidePanel?: (isOpen?: boolean) => void;
+  }
+}
 
 export type SettingsPanelProps = {
   isVisible: boolean;
@@ -29,6 +38,11 @@ export type SettingsPanelProps = {
   onPollingIntervalChange: (interval: number) => void;
   isPollingEnabled: boolean;
   onPollingEnabledChange: (enabled: boolean) => void;
+  // Vision settings
+  frameRate: number;
+  onFrameRateChange: (rate: number) => void;
+  maxFrames: number;
+  onMaxFramesChange: (frames: number) => void;
   // Audio and debug settings
   showAudioDebug: boolean;
   onShowAudioDebugChange: (show: boolean) => void;
@@ -47,6 +61,11 @@ function SettingsPanel({
   onPollingIntervalChange,
   isPollingEnabled,
   onPollingEnabledChange,
+  // Vision settings
+  frameRate,
+  onFrameRateChange,
+  maxFrames,
+  onMaxFramesChange,
   // Audio and debug settings
   showAudioDebug,
   onShowAudioDebugChange,
@@ -55,6 +74,41 @@ function SettingsPanel({
   muted,
   onMutedChange
 }: SettingsPanelProps) {
+  // Get vision context for model selection
+  const { 
+    openAIConnected, 
+    currentModel,
+    setCurrentModel 
+  } = useVision();
+  
+  // State for console panel visibility
+  const [isSidePanelVisible, setIsSidePanelVisible] = useState<boolean>(false);
+  
+  // Update local state based on actual side panel state when settings open
+  useEffect(() => {
+    if (isVisible) {
+      // Check if side panel is open
+      const sidePanel = document.querySelector('.side-panel');
+      setIsSidePanelVisible(sidePanel?.classList.contains('open') || false);
+    }
+  }, [isVisible]);
+
+  // Set initial state of side panel when component mounts
+  useEffect(() => {
+    // Ensure the side panel is initialized to match our settings
+    if (window.toggleSidePanel) {
+      window.toggleSidePanel(isSidePanelVisible);
+    }
+  }, [isSidePanelVisible]);
+
+  // Toggle side panel visibility
+  const toggleSidePanel = (visible: boolean) => {
+    setIsSidePanelVisible(visible);
+    if (window.toggleSidePanel) {
+      window.toggleSidePanel(visible);
+    }
+  };
+  
   // Close on escape key
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
@@ -96,6 +150,33 @@ function SettingsPanel({
           </button>
         </div>
         <div className="settings-content">
+          
+          <div className="setting-group">
+            <h3 className="setting-section-title">Espresso Mode Polling Settings</h3>
+            
+            <div style={{ 
+              opacity: isPollingEnabled ? 1 : 0.5, 
+              pointerEvents: isPollingEnabled ? "auto" : "none",
+              marginTop: "20px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              width: "100%"
+            }}>
+              <label htmlFor="polling-interval">Check interval (seconds):</label>
+              <input
+                id="polling-interval"
+                type="number"
+                min="1"
+                max="60"
+                style={{ width: "100px" }}
+                value={pollingInterval}
+                onChange={(e) => onPollingIntervalChange(Number(e.target.value))}
+                disabled={!isPollingEnabled}
+              />
+            </div>
+          </div>
+          
           <div className="setting-group">
             <h3 className="setting-section-title">Video Settings</h3>
             <label htmlFor="video-source">Video Stream Source:</label>
@@ -110,6 +191,72 @@ function SettingsPanel({
               <option value="webcam">Device Camera Feed</option>
               <option value="whep">Neckband Camera Feed</option>
             </select>
+          </div>
+          
+          {/* Model Configuration Section */}
+          <div className="setting-group">
+            <h3 className="setting-section-title">Vision Setting</h3>
+
+            <div className="setting-row">
+              <label htmlFor="vision-frame-rate" className="row-label">Frame Rate (FPS) to capture for the Vision Models:</label>
+              <input
+                id="vision-frame-rate"
+                type="number"
+                min="1"
+                max="30"
+                style={{ width: "80px" }}
+                value={frameRate}
+                onChange={(e) => onFrameRateChange(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="setting-row" style={{ marginTop: "10px" }}>
+              <label htmlFor="max-frames" className="row-label">Number ofFrames to Send to the Vision Model:</label>
+              <input
+                id="max-frames"
+                type="number"
+                min="5"
+                max="30"
+                style={{ width: "80px" }}
+                value={maxFrames}
+                onChange={(e) => onMaxFramesChange(Number(e.target.value))}
+              />
+            </div>
+
+            <div className="model-selection">
+              {/* OpenAI Option */}
+              <div 
+                className={`model-option ${currentModel === "openai" ? "active" : ""}`}
+                onClick={() => setCurrentModel("openai")}
+              >
+                <div className={`model-indicator ${openAIConnected ? "connected" : ""}`} />
+                <div className="model-details">
+                  <div className="model-name">OpenAI GPT-4o</div>
+                  <div className="model-status">
+                    {openAIConnected ? "Connected" : "Not connected"}
+                  </div>
+                </div>
+              </div>
+              
+              {/* Google Option */}
+              <div 
+                className={`model-option ${currentModel === "google" ? "active" : ""}`}
+                onClick={() => setCurrentModel("google")}
+              >
+                <div className="model-indicator google" />
+                <div className="model-details">
+                  <div className="model-name">Google Gemini</div>
+                  <div className="model-status">Default model</div>
+                </div>
+              </div>
+            </div>
+            
+            <p className="model-note">
+              {openAIConnected 
+                ? "OpenAI API key detected from environment variables." 
+                : "OpenAI API key not found or invalid. Add REACT_APP_OPENAI_API_KEY to your .env file."
+              }
+            </p>
           </div>
           
           <div className="setting-group">
@@ -134,34 +281,17 @@ function SettingsPanel({
               />
             </div>
           </div>
-          
-          <div className="setting-group">
-            <h3 className="setting-section-title">Status Update Settings</h3>
+
+           {/* UI Panel Settings */}
+           <div className="setting-group">
+            <h3 className="setting-section-title">UI Panels</h3>
             <div className="setting-row">
-              <label htmlFor="polling-enabled" className="row-label">Auto-check status updates:</label>
+              <label htmlFor="show-console-panel" className="row-label">Show Console Panel:</label>
               <input
-                id="polling-enabled"
+                id="show-console-panel"
                 type="checkbox"
-                checked={isPollingEnabled}
-                onChange={(e) => onPollingEnabledChange(e.target.checked)}
-              />
-            </div>
-            
-            <div style={{ 
-              opacity: isPollingEnabled ? 1 : 0.5, 
-              pointerEvents: isPollingEnabled ? "auto" : "none",
-              marginTop: "20px"
-            }}>
-              <label htmlFor="polling-interval">Check interval (seconds):</label>
-              <input
-                id="polling-interval"
-                type="number"
-                min="1"
-                max="60"
-                style={{ width: "100px" }}
-                value={pollingInterval}
-                onChange={(e) => onPollingIntervalChange(Number(e.target.value))}
-                disabled={!isPollingEnabled}
+                checked={isSidePanelVisible}
+                onChange={(e) => toggleSidePanel(e.target.checked)}
               />
             </div>
           </div>
@@ -172,4 +302,4 @@ function SettingsPanel({
   );
 }
 
-export default memo(SettingsPanel); 
+export default SettingsPanel;
