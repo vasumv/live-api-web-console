@@ -37,7 +37,7 @@ export class OpenAIVisionClient extends EventEmitter<OpenAIVisionClientEventType
    * @param frames Array of base64-encoded image data
    * @param prompt Text prompt to send along with the images
    */
-  async analyzeFrames(frames: string[], prompt: string) {
+  async analyzeFrames(frames: string[], prompt: string): Promise<void> {
     if (!frames.length) {
       this.emit('error', new Error('No frames provided for analysis'));
       return;
@@ -81,9 +81,35 @@ export class OpenAIVisionClient extends EventEmitter<OpenAIVisionClientEventType
           messages: [
             {
               role: "system",
-              content: `
-                You are a helpful assistant that analyzes video frames and provides a description of the video feed.
-                Describe the 10 frames in detail and the action taking place in them.
+              content: `You will be provided a video feed and a task that the user is currently doing, along with a list of steps of that task and which
+              step the user is currently on. 
+              First, describe what the user is doing in the video feed. Then, using that description and the video, determine which step of the process the user is 
+              doing in the video and **if that step is AHEAD of the step that they're supposed to  be doing**. Example format:
+                      {
+                        "videoDescription": "<describe the video feed in detail and the action taking place in the 10 frames I have provided>"
+                        "isStepCorrect": true/false,
+                      }
+              Example Input:
+                Task: Making a sandwich
+                Steps: [
+                  "1. Place two slices of bread on the cutting board",
+                  "2. Spread mayonnaise on one slice of bread",
+                  "3. Add lettuce on top of the mayonnaise",
+                  "4. Place sliced cheese on top of the lettuce",
+                  "5. Add sliced tomatoes on top of the cheese",
+                  "6. Place sliced turkey on top of the tomatoes",
+                  "7. Close the sandwich with the second slice of bread",
+                  "8. Cut the sandwich diagonally"
+                ]
+                Current step: 4
+                
+                Video Feed explanation: The video shows hands placing sliced tomatoes onto a piece of bread that already has mayonnaise and lettuce on it. The cheese that should be added in step 4 is visible nearby but hasn't been placed on the sandwich yet.
+              Based on this input, the output should be:
+              {
+                "videoDescription": "The video shows hands placing sliced tomatoes onto a piece of bread that already has mayonnaise and lettuce on it. The cheese that should be added in step 4 is visible nearby but hasn't been placed on the sandwich yet.",
+                "isStepCorrect": false
+              }
+              since the user is currently on step 4 but they are not placing cheese on the sandwich as they should be.
               `
             },
             {

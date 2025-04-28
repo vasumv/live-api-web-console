@@ -16,6 +16,7 @@ interface VisionContextType {
   sendFrame: (imageData: string) => void;
   requestAnalysis: (prompt: string) => void;
   lastDescription: string | null;
+  isStepCorrect: boolean | null;
   isVisionEnabled: boolean;
   setVisionEnabled: (enabled: boolean) => void;
   lastFrameData: string | null;
@@ -71,6 +72,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
   const [analyzing, setAnalyzing] = useState(false);
   const [isVisionEnabled, setVisionEnabled] = useState(true);
   const [lastDescription, setLastDescription] = useState<string | null>(null);
+  const [isStepCorrect, setIsStepCorrect] = useState<boolean | null>(null);
   const [lastFrameData, setLastFrameData] = useState<string | null>(null);
   
   // Store the latest 10 frames
@@ -136,6 +138,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
       console.log('OpenAI Vision response:', data);
       if (data.videoDescription) {
         setLastDescription(data.videoDescription);
+        setIsStepCorrect(data.isStepCorrect === "true" ? true : false);
         setAnalyzing(false);
       }
     };
@@ -311,6 +314,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     sendFrame,
     requestAnalysis,
     lastDescription,
+    isStepCorrect,
     isVisionEnabled,
     setVisionEnabled,
     lastFrameData,

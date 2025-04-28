@@ -21,6 +21,7 @@ import { useSpeech } from "../../contexts/SpeechContext";
 import { useVision } from "../../contexts/VisionContext";
 import { ToolCall, ServerContent, isModelTurn } from "../../multimodal-live-types";
 import { TaskPanel, ResponseJson } from "./TaskPanel";
+import { isStep } from "vega-lite/build/src/spec/base";
 
 function ExpressoComponent() {
   const [latestResponse, setLatestResponse] = useState<ResponseJson | null>(null);
@@ -36,11 +37,12 @@ function ExpressoComponent() {
   const { 
     requestAnalysis, 
     lastDescription, 
+    isStepCorrect,
     connected: visionConnected, 
     connect: connectVision,
     analyzing: visionAnalyzing
   } = useVision();
-  
+
   const { isPollingEnabled, pollingInterval, setIsPollingEnabled } = usePolling();
 
   useEffect(() => {
@@ -67,7 +69,9 @@ function ExpressoComponent() {
                 (3) Output only the JSON format below. 
                 (4) Wait for the user to say "yes" to confirm before proceeding. 
                 
-                While a task is in progress: Use the video feed to track step completion. 
+                While a task is in progress: answer any questions the user has. Your answer to any user questions should be in the 
+                "chatResponse" field of the final JSON. Then, when the user asks if they're ready to move to the next step, 
+                determine if the current step is "done", "inprogress" or "todo" based on the video description. 
                 A step should go from "todo" → "inprogress" → "done", based solely on visual evidence—not user input. Skip "inprogress" only if completion is visually obvious. 
                 For each response, return: 
                 (a) steps: All steps and statuses, 
@@ -75,7 +79,6 @@ function ExpressoComponent() {
                 (c) currentStepDetailedDescription: Actionable guidance for that step,
                 (d) currentStepExplanation: 2 lines - In the first line describe the video description in great detail espcially covering objects/instruments and actions that are relavant to the task. In the second line explain how the video confirms the current status ENSURE THIS IS ACCURATE AND CONSISTENT WITH THE VIDEO, while deciding the status of the step your goal is to avoid false positives at all costs,
                 (e) chatResponse: a friendly response that would be an appropriate response to the user's actions, remember this will be spoken aloud, try to refer to the objects and thir palcement (left, right, top, bottom or prerfeably relative to other objects) in the video feed as much as possible, use the objects in the video feed to guide the user through the steps.
-                (f) taskTitle: a clear, concise title for the overall task being performed (e.g., "Brewing Espresso", "Assembling IKEA Chair").
                 
                 Output only the JSON object—never plain text.
                 JSON response format (always output, no extra text):
@@ -87,13 +90,12 @@ function ExpressoComponent() {
                 "currentStep": "step1",
                 "currentStepDetailedDescription": "<detailed instructions>",
                 "currentStepExplanation": "<based on video explain why you chose the status>",
-                "chatResponse": "<response  which will be spoken aloud to the user>",
-                "taskTitle": "<clear, concise title for the task>"
+                "chatResponse": "<response  which will be spoken aloud to the user>"
                 }
                 Example task (do not output—internal guidance): Making a latte → step1: "Fill portafilter", step2: "Tamp grounds", step3: "Start espresso shot", step4: "Steam milk", step5: "Pour milk into espresso". On "Next!", do not advance unless step is visually marked "done". Re-explain if asked. Never output anything except the JSON.
 
                 IMPORTANT: If the user is just asking for help or clarification, output the JSON with the current step and its status as "todo" or "inprogress", but do not advance to the next step.
-                In the chatResponse, answer the user's question or provide clarification, but do not advance to the next step.
+                In the chatResponse, answer the user's question or provide clarification, but do not advance to the next step. Answer the question like you're an assistant. Don'tw worry about the step.
               `
           }
         ]
@@ -139,11 +141,24 @@ function ExpressoComponent() {
       lastVisionRequestTimeRef.current = now;
       
       // Request the vision analysis
+
+      // Construct a list of steps with the following format: [
+      //   { text: "step1", text: "step_text" },  
+      //   { text: "step2", text: "step_text" } ]
+
+      const steps = Object.entries(latestResponse.steps).map(([key, value]) => (
+        { key: value.text }
+      ));
+      // Construct a prompt with the task title, list of steps, and the current step.
+      const taskTitle = latestResponse.taskTitle;
+      const currentStep = latestResponse.currentStep;
+      const prompt = `
+        Task: ${taskTitle}
+        Steps: ${JSON.stringify(steps)} 
+        Current Step: ${latestResponse.currentStep}
+      `
       requestAnalysis(
-        `
-        Analyze these 10 frames and decide if the current task step: "${latestResponse.currentStepDetailedDescription}" is done, in progress or todo based on the video description.
-        Do not repeat the task description, just output the description from the video frames.
-        `
+        prompt
       );
     }
     
@@ -163,8 +178,8 @@ function ExpressoComponent() {
             4. If the status has changed, update the step status in the response.
             5. If the status remains the same, update the chat response to ask a question about the current step based
             on the video description.
-      `
-    }]);
+      `,
+    }], false);
 
     // Reset polling flag after a brief delay to show the indicator
     setTimeout(() => {
@@ -201,13 +216,13 @@ function ExpressoComponent() {
 
   // Handle speaking the chatResponse
   useEffect(() => {
-    if (latestResponse && latestResponse.chatResponse) {
+    if (latestResponse && latestResponse.chatResponse && !isStepCorrect) {
       // Always speak the latest response, even if it's the same as before
       // This ensures we restart speech if interrupted by polling updates
       speak(latestResponse.chatResponse);
       lastSpokenResponseRef.current = latestResponse.chatResponse;
     }
-  }, [latestResponse, speak]);
+  }, [latestResponse, isStepCorrect, speak]);
 
   // Handle custom instructions change
   const handleCustomInstructionsChange = useCallback((instructions: string) => {
