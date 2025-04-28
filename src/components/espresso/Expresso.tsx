@@ -167,7 +167,8 @@ function ExpressoComponent() {
     const visionDescription = lastDescription 
       ? lastDescription.replace(/```json|```/g, '').trim() 
       : "No detailed visual information available yet";
-    
+    console.log("visionDescription", visionDescription);
+    console.log("isStepCorrect", isStepCorrect);
     // Send a request to check for status updates
     client.send([{ 
       text: `
@@ -178,8 +179,10 @@ function ExpressoComponent() {
             4. If the status has changed, update the step status in the response.
             5. If the status remains the same, update the chat response to ask a question about the current step based
             on the video description.
+
+            ${!isStepCorrect ? "The user is currently NOT doing the current step. Update the chat response to tell the user to work on the current step instead of what they're working on." : ""}
       `,
-    }], false);
+    }], true);
 
     // Reset polling flag after a brief delay to show the indicator
     setTimeout(() => {
@@ -214,15 +217,15 @@ function ExpressoComponent() {
     setIsPollingEnabled(!isPollingEnabled);
   }, [isPollingEnabled, setIsPollingEnabled]);
 
-  // Handle speaking the chatResponse
-  useEffect(() => {
-    if (latestResponse && latestResponse.chatResponse && !isStepCorrect) {
-      // Always speak the latest response, even if it's the same as before
-      // This ensures we restart speech if interrupted by polling updates
-      speak(latestResponse.chatResponse);
-      lastSpokenResponseRef.current = latestResponse.chatResponse;
-    }
-  }, [latestResponse, isStepCorrect, speak]);
+  // // Handle speaking the chatResponse
+  // useEffect(() => {
+  //   if (latestResponse && latestResponse.chatResponse && !isStepCorrect) {
+  //     // Always speak the latest response, even if it's the same as before
+  //     // This ensures we restart speech if interrupted by polling updates
+  //     speak(latestResponse.chatResponse);
+  //     lastSpokenResponseRef.current = latestResponse.chatResponse;
+  //   }
+  // }, [latestResponse, isStepCorrect, speak]);
 
   // Handle custom instructions change
   const handleCustomInstructionsChange = useCallback((instructions: string) => {
@@ -249,9 +252,19 @@ function ExpressoComponent() {
           const newText = textParts.map(part => part.text).join("\n");
           setLatestRawText(newText);
           try {
+            console.log("newText", newText);
             const cleanedText = newText.replace(/```json|```/g, '').trim();
             const parsedJson: ResponseJson = JSON.parse(cleanedText);
-            setLatestResponse(parsedJson);
+            console.log("parsedJson", parsedJson);
+
+            if(!isStepCorrect || parsedJson.currentStep !== latestResponse?.currentStep) {
+              setLatestResponse(parsedJson);         
+              speak(parsedJson.chatResponse);     
+            }
+            else {
+              setLatestResponse({...parsedJson, chatResponse: latestResponse?.chatResponse});
+            }
+
           } catch (error) {
             if (newText.includes("yes") || newText.includes("no")) {
               console.log("Received yes or no response:", newText);

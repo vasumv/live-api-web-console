@@ -137,8 +137,9 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
     const onResponse = (data: any) => {
       console.log('OpenAI Vision response:', data);
       if (data.videoDescription) {
-        setLastDescription(data.videoDescription);
-        setIsStepCorrect(data.isStepCorrect === "true" ? true : false);
+        const parsedVisionDescription = JSON.parse(data.videoDescription.replace(/```json|```/g, '').trim());
+        setLastDescription(parsedVisionDescription.videoDescription);
+        setIsStepCorrect(parsedVisionDescription.isStepCorrect === "true" ? true : false);
         setAnalyzing(false);
       }
     };
