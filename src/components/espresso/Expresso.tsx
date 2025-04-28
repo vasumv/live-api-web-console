@@ -26,6 +26,7 @@ function ExpressoComponent() {
   const [latestResponse, setLatestResponse] = useState<ResponseJson | null>(null);
   const [latestRawText, setLatestRawText] = useState<string>("");
   const [isPolling, setIsPolling] = useState<boolean>(false);
+  const [customInstructions, setCustomInstructions] = useState<string>("");
   const pollingTimerRef = useRef<number | null>(null);
   const lastSpokenResponseRef = useRef<string | null>(null);
   const lastVisionRequestTimeRef = useRef<number>(0);
@@ -57,6 +58,9 @@ function ExpressoComponent() {
             text: 
               `
                 You are a hands-on assistant that helps users complete real-world, physical tasks (e.g., espresso brewing, furniture assembly, bike repair, lab protocols). 
+
+                ${customInstructions ? "The user has provided the following custom instructions which you should follow: " + customInstructions + "\n\n" : ""}
+
                 When a new task is requested: 
                 (1) Break it into small, atomic steps ("step1", "step2", …). Be thorough and avoid bundling actions. First step should always be to locate the object/instrument that is required for the task.  
                 (2) Set all statuses to "todo". 
@@ -100,7 +104,7 @@ function ExpressoComponent() {
         // { functionDeclarations: [declaration] },
       ],
     });
-  }, [setConfig]);
+  }, [setConfig, customInstructions]);
 
   // Auto-connect vision and speech when main client connects
   useEffect(() => {
@@ -205,6 +209,20 @@ function ExpressoComponent() {
     }
   }, [latestResponse, speak]);
 
+  // Handle custom instructions change
+  const handleCustomInstructionsChange = useCallback((instructions: string) => {
+    setCustomInstructions(instructions);
+    client.send([{
+      text: `
+        Custom Instructions:
+        ${instructions}
+
+
+        IMPORTANT: Do not use any tool calls or do a google search if the user has provided custom instructions.
+      `
+    }]);
+  }, []);
+
   useEffect(() => {
     
     const onContent = (content: ServerContent) => {
@@ -256,6 +274,8 @@ function ExpressoComponent() {
         isPolling={isPolling}
         isPollingEnabled={isPollingEnabled}
         onTogglePolling={handleTogglePolling}
+        onCustomInstructionsChange={handleCustomInstructionsChange}
+        customInstructions={customInstructions}
       />
     </>
   );

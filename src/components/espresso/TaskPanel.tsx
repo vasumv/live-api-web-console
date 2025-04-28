@@ -71,6 +71,8 @@ interface TaskPanelProps {
   isPolling: boolean;
   isPollingEnabled: boolean;
   onTogglePolling: () => void;
+  onCustomInstructionsChange?: (instructions: string) => void;
+  customInstructions?: string;
 }
 
 function TaskPanelComponent({
@@ -78,7 +80,9 @@ function TaskPanelComponent({
   latestRawText,
   isPolling,
   isPollingEnabled,
-  onTogglePolling
+  onTogglePolling,
+  onCustomInstructionsChange,
+  customInstructions: propCustomInstructions = ''
 }: TaskPanelProps) {
   const [isExplanationExpanded, setIsExplanationExpanded] = useState<boolean>(true);
   const [isVisionDescriptionExpanded, setIsVisionDescriptionExpanded] = useState<boolean>(true);
@@ -86,12 +90,19 @@ function TaskPanelComponent({
   const [currentFrameIndex, setCurrentFrameIndex] = useState<number>(0);
   const [showModeDropdown, setShowModeDropdown] = useState<boolean>(false);
   const [isDebugPanelExpanded, setIsDebugPanelExpanded] = useState<boolean>(false);
+  const [localCustomInstructions, setLocalCustomInstructions] = useState<string>(propCustomInstructions);
+  const [showInstructionsPopup, setShowInstructionsPopup] = useState<boolean>(false);
   const { speaking, isSpeechEnabled, setSpeechEnabled } = useSpeech();
   const { 
     lastDescription, 
     analyzing, 
     frameBuffer
   } = useVision();
+
+  // Update local instructions when prop changes
+  useEffect(() => {
+    setLocalCustomInstructions(propCustomInstructions);
+  }, [propCustomInstructions]);
 
   // Auto-rotate frames only if there are frames
   useEffect(() => {
@@ -122,6 +133,21 @@ function TaskPanelComponent({
     return () => document.removeEventListener('mousedown', handleOutsideClick);
   }, [showModeDropdown]);
   
+  // Close instructions popup when clicking outside
+  useEffect(() => {
+    if (!showInstructionsPopup) return;
+    
+    const handleOutsideClick = (e: MouseEvent) => {
+      if ((e.target as Element).closest('.instructions-popup') === null && 
+          (e.target as Element).closest('.instructions-button') === null) {
+        setShowInstructionsPopup(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showInstructionsPopup]);
+  
   // Frame navigation handlers - only if frames are available
   const goToPrevFrame = useCallback(() => {
     if (!frameBuffer || frameBuffer.length === 0) return;
@@ -138,6 +164,22 @@ function TaskPanelComponent({
       prevIndex === frameBuffer.length - 1 ? 0 : prevIndex + 1
     );
   }, [frameBuffer]);
+
+  const handleCustomInstructionsChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setLocalCustomInstructions(e.target.value);
+  }, []);
+  
+  const toggleInstructionsPopup = useCallback(() => {
+    setShowInstructionsPopup(!showInstructionsPopup);
+  }, [showInstructionsPopup]);
+  
+  const saveCustomInstructions = useCallback(() => {
+    // Pass the instructions up to the parent component
+    if (onCustomInstructionsChange) {
+      onCustomInstructionsChange(localCustomInstructions);
+    }
+    setShowInstructionsPopup(false);
+  }, [localCustomInstructions, onCustomInstructionsChange]);
 
   return (
     <div className="expresso-container" style={{
@@ -196,6 +238,30 @@ function TaskPanelComponent({
           }}>Task Assistant</div>
         </div>
         <div style={{ display: "flex", gap: "12px" }}>
+          {/* Custom Instructions Button */}
+          <div 
+            className="instructions-button"
+            onClick={toggleInstructionsPopup}
+            style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              color: localCustomInstructions ? colors.primary : 'rgba(170, 170, 170, 0.6)',
+              cursor: "pointer",
+              padding: "4px 8px",
+              borderRadius: "12px",
+              transition: "background-color 0.2s ease",
+              position: "relative"
+            }}
+            title="Custom Instructions"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24">
+              <path 
+                fill="currentColor" 
+                d="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z" 
+              />
+            </svg>
+          </div>
+          
           {/* Speech toggle button */}
           <div 
             onClick={() => setSpeechEnabled(!isSpeechEnabled)}
@@ -1115,6 +1181,138 @@ function TaskPanelComponent({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Custom Instructions Popup */}
+      {showInstructionsPopup && (
+        <div className="instructions-popup" style={{
+          position: "fixed",
+          top: "50%",
+          left: "50%",
+          transform: "translate(-50%, -50%)",
+          width: "600px",
+          maxWidth: "90vw",
+          maxHeight: "90vh",
+          display: "flex",
+          flexDirection: "column",
+          backgroundColor: colors.background,
+          borderRadius: "10px",
+          boxShadow: `0 4px 20px ${colors.shadow}`,
+          border: `1px solid ${colors.border}`,
+          padding: "24px",
+          zIndex: 1000,
+          overflowY: "auto"
+        }}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "16px",
+            borderBottom: `1px solid ${colors.border}`,
+            paddingBottom: "12px"
+          }}>
+            <h3 style={{ 
+              margin: 0, 
+              fontWeight: 500, 
+              fontSize: "20px", 
+              color: colors.onBackground 
+            }}>
+              Custom Instructions
+            </h3>
+            <div 
+              onClick={() => setShowInstructionsPopup(false)}
+              style={{
+                cursor: "pointer",
+                opacity: 0.7,
+                transition: "opacity 0.2s ease",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "32px",
+                height: "32px"
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.opacity = "1"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.7"; }}
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24">
+                <path fill="currentColor" d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z" />
+              </svg>
+            </div>
+          </div>
+          
+          <p style={{ 
+            fontSize: "15px", 
+            color: colors.onSurfaceVariant, 
+            marginBottom: "16px",
+            lineHeight: 1.5 
+          }}>
+            Add custom instructions to personalize how the assistant helps with your tasks. These instructions can be as detailed as you need them to be.
+          </p>
+          
+          {/* Large text area instead of input field */}
+          <textarea
+            value={localCustomInstructions}
+            onChange={handleCustomInstructionsChange}
+            placeholder="Enter your custom instructions here. You can provide detailed preferences, specific requirements, or any particular way you'd like the assistant to guide you through tasks..."
+            style={{
+              width: "100%",
+              minHeight: "200px",
+              padding: "14px 16px",
+              borderRadius: "8px",
+              border: `1px solid ${colors.border}`,
+              backgroundColor: colors.background,
+              color: colors.onBackground,
+              fontSize: "15px",
+              lineHeight: "1.5",
+              outline: "none",
+              marginBottom: "20px",
+              fontFamily: "'Google Sans', 'Roboto', sans-serif",
+              boxSizing: "border-box",
+              resize: "vertical"
+            }}
+            onFocus={(e) => e.target.style.borderColor = colors.primary}
+            onBlur={(e) => e.target.style.borderColor = colors.border}
+          />
+          
+          <div style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "12px",
+            marginTop: "8px"
+          }}>
+            <button
+              onClick={() => setShowInstructionsPopup(false)}
+              style={{
+                padding: "10px 20px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: "transparent",
+                color: colors.onSurfaceVariant,
+                cursor: "pointer",
+                fontSize: "15px",
+                fontWeight: 500
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={saveCustomInstructions}
+              style={{
+                padding: "10px 24px",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: colors.primary,
+                color: "#fff",
+                cursor: "pointer",
+                fontSize: "15px",
+                fontWeight: 500
+              }}
+            >
+              Save
+            </button>
+          </div>
         </div>
       )}
     </div>
