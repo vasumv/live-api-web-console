@@ -173,7 +173,7 @@ function ExpressoComponent() {
     client.send([{ 
       text: `
           Instructions:
-            1. Here is what we see in the video feed now: "${visionDescription}"
+            1. ${visionDescription || visionDescription == "" ? `Here is what we see in the video feed now: "${visionDescription}".` : "Based on the video write a description of what is happening in the video."}
             2. The objective of the current step is: "${latestResponse.currentStepDetailedDescription}"
             3. Determine if the status of the current step has changed (to 'done', 'inprogress', or remains 'todo') based on the video description.
             4. If the status has changed, update the step status in the response.
@@ -257,7 +257,8 @@ function ExpressoComponent() {
             const parsedJson: ResponseJson = JSON.parse(cleanedText);
             console.log("parsedJson", parsedJson);
 
-            if(!isStepCorrect || parsedJson.currentStep !== latestResponse?.currentStep) {
+            if(!isStepCorrect || parsedJson.currentStep !== latestResponse?.currentStep || (latestResponse?.steps[latestResponse.currentStep]?.status !== parsedJson.steps[parsedJson.currentStep]?.status)) {
+              alert(parsedJson.chatResponse + " " + isStepCorrect + " " + parsedJson.currentStep + " " + latestResponse?.currentStep);  
               setLatestResponse(parsedJson);         
               speak(parsedJson.chatResponse);     
             }

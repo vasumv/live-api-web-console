@@ -45,8 +45,20 @@ export function useScreenCapture(): UseMediaStreamResult {
     // controller.setFocusBehavior("no-focus-change");
     const mediaStream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
+      audio: true  // Request audio as well
       // controller
     });
+    
+    // Log information about audio tracks
+    const audioTracks = mediaStream.getAudioTracks();
+    console.log(`Screen capture: Got ${audioTracks.length} audio tracks`);
+    if (audioTracks.length > 0) {
+      console.log("Screen capture audio tracks:", 
+        audioTracks.map(track => `${track.label} (enabled: ${track.enabled})`));
+    } else {
+      console.log("Screen capture: No audio tracks available. System might not support audio capture with screen sharing.");
+    }
+    
     setStream(mediaStream);
     setIsStreaming(true);
     return mediaStream;

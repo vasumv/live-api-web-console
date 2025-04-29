@@ -20,7 +20,7 @@ import { useVision } from "../../contexts/VisionContext";
 import "./settings-panel.scss";
 
 // Video source types
-export type VideoSource = "webcam" | "whep" | null;
+export type VideoSource = "webcam" | "whep" | "screen" | null;
 
 // Extend window interface to include our toggleSidePanel function
 declare global {
@@ -190,6 +190,7 @@ function SettingsPanel({
               </option>
               <option value="webcam">Device Camera Feed</option>
               <option value="whep">Neckband Camera Feed</option>
+              <option value="screen">Screen Recording</option>
             </select>
           </div>
           

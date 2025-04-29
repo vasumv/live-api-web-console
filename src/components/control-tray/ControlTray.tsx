@@ -284,6 +284,8 @@ function ControlTray({
           setActiveVideoSource("webcam");
         } else if (next.type === "whep") {
           setActiveVideoSource("whep");
+        } else if (next.type === "screen") {
+          setActiveVideoSource("screen");
         } else {
           setActiveVideoSource(null);
         }
@@ -317,6 +319,8 @@ function ControlTray({
       changeStreams(webcam)();
     } else if (source === "whep") {
       changeStreams(whepStream)();
+    } else if (source === "screen") {
+      changeStreams(screenCapture)();
     }
     
     // Keep settings open
@@ -350,14 +354,14 @@ function ControlTray({
           {supportsVideo && (
             <>
               <MediaStreamButton
-                isStreaming={screenCapture.isStreaming}
+                isStreaming={screenCapture.isStreaming || activeVideoSource === "screen"}
                 start={changeStreams(screenCapture)}
                 stop={changeStreams()}
                 onIcon="cancel_presentation"
                 offIcon="present_to_all"
               />
               <MediaStreamButton
-                isStreaming={whepStream.isStreaming || webcam.isStreaming}
+                isStreaming={(whepStream.isStreaming || webcam.isStreaming) && activeVideoSource !== "screen"}
                 start={changeStreams(activeVideoSource === "webcam" ? webcam : whepStream)}
                 stop={changeStreams()}
                 onIcon="videocam_off"

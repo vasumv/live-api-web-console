@@ -72,7 +72,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
   const [analyzing, setAnalyzing] = useState(false);
   const [isVisionEnabled, setVisionEnabled] = useState(true);
   const [lastDescription, setLastDescription] = useState<string | null>(null);
-  const [isStepCorrect, setIsStepCorrect] = useState<boolean | null>(null);
+  const [isStepCorrect, setIsStepCorrect] = useState<boolean | null>(true);
   const [lastFrameData, setLastFrameData] = useState<string | null>(null);
   
   // Store the latest 10 frames
@@ -106,7 +106,7 @@ export const VisionProvider: FC<VisionProviderProps> = ({ children, apiKey }) =>
           
           // If Google isn't connected yet, set a message
           if (!connected) {
-            setLastDescription("OpenAI GPT-4o connected successfully! Request analysis to see results.");
+            setLastDescription("");
           }
         } else {
           // If OpenAI fails but it's the selected model, switch to Google

@@ -1064,7 +1064,8 @@ function TaskPanelComponent({
                   fontSize: "15px",
                   lineHeight: "1.5"
                 }}>
-                  I'm your intelligent assistant ready to help with tasks. Ask me anything, and I'll guide you through it step by step.
+                  I'm your intelligent assistant ready to help with tasks. <br />
+                  Ask me anything, and I'll guide you through it step by step.
                 </p>
               
               {/* Add frame display in initial state */}
