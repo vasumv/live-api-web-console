@@ -257,7 +257,11 @@ function ExpressoComponent() {
             const parsedJson: ResponseJson = JSON.parse(cleanedText);
             console.log("parsedJson", parsedJson);
 
-            if(!isStepCorrect || parsedJson.currentStep !== latestResponse?.currentStep || (latestResponse?.steps[latestResponse.currentStep]?.status !== parsedJson.steps[parsedJson.currentStep]?.status)) {
+            if (!isPollingEnabled) {
+              setLatestResponse(parsedJson);         
+              speak(parsedJson.chatResponse);     
+            }
+            else if (!isStepCorrect || parsedJson.currentStep !== latestResponse?.currentStep || (latestResponse?.steps[latestResponse.currentStep]?.status !== parsedJson.steps[parsedJson.currentStep]?.status)) {
               alert(parsedJson.chatResponse + " " + isStepCorrect + " " + parsedJson.currentStep + " " + latestResponse?.currentStep);  
               setLatestResponse(parsedJson);         
               speak(parsedJson.chatResponse);     
