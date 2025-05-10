@@ -169,3 +169,19 @@ body {
   border-radius: 32px;
   max-height: fit-content;
 }
+
+/* Animation for the speaking indicator */
+@keyframes pulse {
+  0% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  100% {
+    opacity: 0.4;
+    transform: scale(0.8);
+  }
+}

@@ -17,6 +17,7 @@ import { type FunctionDeclaration, SchemaType } from "@google/generative-ai";
 import { useEffect, useState, memo, useRef, useCallback } from "react";
 import { useLiveAPIContext } from "../../contexts/LiveAPIContext";
 import { usePolling } from "../../contexts/PollingContext";
+import { useSpeech } from "../../contexts/SpeechContext";
 import { ToolCall, ServerContent, isModelTurn } from "../../multimodal-live-types";
 import { TaskPanel, ResponseJson } from "./TaskPanel";
 
@@ -25,7 +26,11 @@ function ExpressoComponent() {
   const [latestRawText, setLatestRawText] = useState<string>("");
   const [isPolling, setIsPolling] = useState<boolean>(false);
   const pollingTimerRef = useRef<number | null>(null);
+  const lastSpokenResponseRef = useRef<string | null>(null);
+  
   const { client, setConfig, connect, disconnect } = useLiveAPIContext();
+  const { speak, connected: speechConnected, connect: connectSpeech } = useSpeech();
+  
   const { isPollingEnabled, pollingInterval, setIsPollingEnabled } = usePolling();
 
   useEffect(() => {
@@ -139,6 +144,23 @@ function ExpressoComponent() {
     setIsPollingEnabled(!isPollingEnabled);
   }, [isPollingEnabled, setIsPollingEnabled]);
 
+  // Ensure speech API is connected when main API is connected
+  useEffect(() => {
+    if (!speechConnected) {
+      connectSpeech();
+    }
+  }, [speechConnected, connectSpeech]);
+
+  // Handle speaking the chatResponse
+  useEffect(() => {
+    if (latestResponse && latestResponse.chatResponse) {
+      // Always speak the latest response, even if it's the same as before
+      // This ensures we restart speech if interrupted by polling updates
+      speak(latestResponse.chatResponse);
+      lastSpokenResponseRef.current = latestResponse.chatResponse;
+    }
+  }, [latestResponse, speak]);
+
   useEffect(() => {
     
     const onContent = (content: ServerContent) => {
@@ -170,6 +192,7 @@ function ExpressoComponent() {
       // Reset responses on new connection
       setLatestResponse(null);
       setLatestRawText("");
+      lastSpokenResponseRef.current = null;
     };
     
     client.on("content", onContent);
